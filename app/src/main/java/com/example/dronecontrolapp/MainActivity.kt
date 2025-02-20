@@ -6,6 +6,9 @@ import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -31,6 +34,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -38,42 +42,59 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        //enableEdgeToEdge()
         setContent {
             DroneControlAppTheme {
                 // A surface container using the 'background' color from the theme
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    DroneControlAppUI()
+
+                Scaffold { innerPadding ->
+                    DroneControlAppUI(
+                        modifier = Modifier.padding(innerPadding)
+                    )
                 }
+
             }
         }
     }
 }
 
 @Composable
-fun DroneControlAppUI() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(8.dp)
-    ) {
-        // Map Section
-        Box(modifier = Modifier.weight(0.85f)) {
-            OSMMapView(modifier = Modifier.fillMaxSize())
-        }
+fun DroneControlAppUI(
+    modifier: Modifier = Modifier
+) {
 
-        Spacer(modifier = Modifier.height(4.dp))
+    var telemetrySectionPosition by remember { mutableIntStateOf(0) } //Zero for bottom and 1 for top
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+    ) {
+        OSMMapView(modifier = Modifier.fillMaxSize())
+
+
+        //Spacer(modifier = Modifier.height(4.dp))
 
         // Controls Section
-        ControlsSection(modifier = Modifier.weight(0.07f))
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(10.dp),
+        ) {
+            ControlsSection(modifier = Modifier.align(Alignment.CenterHorizontally))
+            if (telemetrySectionPosition == 0) TelemetrySection(
+                onChangePosition = {
+                    telemetrySectionPosition = 1
+                }
+            )
+        }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        AnimatedVisibility(telemetrySectionPosition == 1) {
+            TelemetrySection(modifier = Modifier.align(Alignment.TopCenter).padding(10.dp), onChangePosition = {
+                telemetrySectionPosition = 0
+            })
+        }
 
-        // Telemetry Section
-        TelemetrySection(modifier = Modifier.weight(0.08f))
     }
+
 }
 
 @Composable
@@ -123,19 +144,26 @@ fun OSMMapView(modifier: Modifier = Modifier) {
                 }
             },
             modifier = Modifier
-                .fillMaxSize()
-                .shadow(4.dp, shape = MaterialTheme.shapes.medium)
-                .clip(MaterialTheme.shapes.medium)
+                //.fillMaxSize()
+                //.shadow(4.dp, shape = MaterialTheme.shapes.medium)
+                //.clip(MaterialTheme.shapes.medium)
         )
 
+        val screenHeight = LocalConfiguration.current.screenHeightDp
+        val floatingButtonPosition = screenHeight/5
         FloatingActionButton(
             onClick = { mapController?.setCenter(dronePosition) },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(8.dp)
-                .size(40.dp)
+                .padding(10.dp)
+                .offset(y = (-floatingButtonPosition).dp)
+                //.size(40.dp)
         ) {
-            Icon(Icons.Default.MyLocation, contentDescription = "Recenter", modifier = Modifier.size(20.dp))
+            Icon(
+                Icons.Default.MyLocation,
+                contentDescription = "Recenter",
+                modifier = Modifier.size(20.dp)
+            )
         }
 
         // Comment out this section to stop automatic movement
@@ -154,22 +182,69 @@ fun OSMMapView(modifier: Modifier = Modifier) {
         */
     }
 }
+
 @Composable
 fun ControlsSection(modifier: Modifier = Modifier) {
-    val takeoffScale = remember { Animatable(1f) }
-    val landScale = remember { Animatable(1f) }
-    val coroutineScope = rememberCoroutineScope()
 
+    var isDroneOnFlight by remember { mutableStateOf(false) }
+
+    AnimatedContent( modifier = modifier.fillMaxWidth(0.7f), targetState = isDroneOnFlight, label = "") {
+        when (it){
+            true -> {
+                // Drone is on flight")
+                //Land Button
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        //TODO implement logic for landing here
+                        isDroneOnFlight = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                ) {
+                    Icon(
+                        Icons.Default.FlightLand,
+                        contentDescription = "Land",
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text("Land", style = MaterialTheme.typography.labelSmall)
+                }
+            }
+            false ->{
+                // Drone is not on flight")
+                //Take off button
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        //TODO implement drone take off logic here
+                        isDroneOnFlight = true
+                    }
+                ) {
+                    Icon(
+                        Icons.Default.FlightTakeoff,
+                        contentDescription = "Takeoff",
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    Text("Takeoff", style = MaterialTheme.typography.labelSmall)
+
+                }
+            }
+        }
+    }
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(8.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
+            .padding(10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
+
+
         // Takeoff Button with Animation
-        Button(
-            onClick = { 
+        /*Button(
+            onClick = {
                 coroutineScope.launch {
                     takeoffScale.animateTo(0.9f, animationSpec = spring())
                     takeoffScale.animateTo(1f, animationSpec = spring())
@@ -180,13 +255,18 @@ fun ControlsSection(modifier: Modifier = Modifier) {
                 .scale(takeoffScale.value)
                 .height(32.dp),
         ) {
-            Icon(Icons.Default.FlightTakeoff, contentDescription = "Takeoff", modifier = Modifier.size(16.dp))
+            Icon(
+                Icons.Default.FlightTakeoff,
+                contentDescription = "Takeoff",
+                modifier = Modifier.size(16.dp)
+            )
             Spacer(modifier = Modifier.width(4.dp))
             Text("Takeoff", style = MaterialTheme.typography.labelSmall)
-        }
+        }*/
+
 
         // Land Button with Animation
-        Button(
+       /* Button(
             onClick = {
                 coroutineScope.launch {
                     landScale.animateTo(0.9f, animationSpec = spring())
@@ -198,15 +278,19 @@ fun ControlsSection(modifier: Modifier = Modifier) {
                 .scale(landScale.value)
                 .height(32.dp)
         ) {
-            Icon(Icons.Default.FlightLand, contentDescription = "Land", modifier = Modifier.size(16.dp))
+            Icon(
+                Icons.Default.FlightLand,
+                contentDescription = "Land",
+                modifier = Modifier.size(16.dp)
+            )
             Spacer(modifier = Modifier.width(4.dp))
             Text("Land", style = MaterialTheme.typography.labelSmall)
-        }
+        }*/
     }
 }
 
 @Composable
-fun TelemetrySection(modifier: Modifier = Modifier) {
+fun TelemetrySection(modifier: Modifier = Modifier, onChangePosition: () -> Unit) {
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -222,7 +306,11 @@ fun TelemetrySection(modifier: Modifier = Modifier) {
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(horizontal = 8.dp)
         ) {
-            Icon(Icons.Default.Height, contentDescription = "Altitude", modifier = Modifier.size(16.dp))
+            Icon(
+                Icons.Default.Height,
+                contentDescription = "Altitude",
+                modifier = Modifier.size(16.dp)
+            )
             Text("Altitude", style = MaterialTheme.typography.bodySmall)
             Text("0m", style = MaterialTheme.typography.bodySmall)
         }
@@ -242,9 +330,25 @@ fun TelemetrySection(modifier: Modifier = Modifier) {
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(horizontal = 8.dp)
         ) {
-            Icon(Icons.Default.BatteryFull, contentDescription = "Battery", modifier = Modifier.size(16.dp))
+            Icon(
+                Icons.Default.BatteryFull,
+                contentDescription = "Battery",
+                modifier = Modifier.size(16.dp)
+            )
             Text("Battery", style = MaterialTheme.typography.bodySmall)
             Text("100%", style = MaterialTheme.typography.bodySmall)
+        }
+
+        //Position
+        IconButton(
+            onClick = {
+                onChangePosition()
+            }
+        ) {
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowUp,
+                contentDescription = "up",
+            )
         }
     }
 }
