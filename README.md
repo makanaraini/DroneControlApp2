@@ -1,6 +1,6 @@
 # Solar-Powered Low-Cost Cargo Delivery Drone Mobile Control App
 
-![Drone App Screenshot](screenshot.jpg)
+![Drone App Screenshot](/sreenshot.jpg)
 
 ## Overview
 This project is a mobile control app for a **solar-powered, low-cost cargo delivery drone**. The app allows users to control the drone, monitor its telemetry data, and manage cargo delivery tasks via GSM communication. The drone is powered by an **Arduino Mega 2560** and uses a **GSM module** for communication.
