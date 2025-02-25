@@ -40,7 +40,6 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             DroneControlAppTheme {
-                // A surface container using the 'background' color from the theme
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -54,6 +53,33 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun DroneControlAppUI() {
+    val context = LocalContext.current
+    val mqttHandler = remember { MqttHandler(context) }
+    var dronePosition by remember { mutableStateOf(GeoPoint(-1.286389, 36.817223)) }
+    var battery by remember { mutableStateOf(100) }
+    var altitude by remember { mutableStateOf(0.0) }
+    var speed by remember { mutableStateOf(0.0) }
+
+    LaunchedEffect(Unit) {
+        // Connect to MQTT broker
+        mqttHandler.connect("tcp://your-broker-url:1883", "android-client")
+
+        // Subscribe to topics
+        mqttHandler.subscribe("drone/position") { payload ->
+            val (lat, lon) = payload.split(",").map { it.toDouble() }
+            dronePosition = GeoPoint(lat, lon)
+        }
+        mqttHandler.subscribe("drone/battery") { payload ->
+            battery = payload.toInt()
+        }
+        mqttHandler.subscribe("drone/altitude") { payload ->
+            altitude = payload.toDouble()
+        }
+        mqttHandler.subscribe("drone/speed") { payload ->
+            speed = payload.toDouble()
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -61,7 +87,7 @@ fun DroneControlAppUI() {
     ) {
         // Map Section
         Box(modifier = Modifier.weight(0.85f)) {
-            OSMMapView(modifier = Modifier.fillMaxSize())
+            OSMMapView(dronePosition, modifier = Modifier.fillMaxSize())
         }
 
         Spacer(modifier = Modifier.height(4.dp))
@@ -72,14 +98,13 @@ fun DroneControlAppUI() {
         Spacer(modifier = Modifier.height(4.dp))
 
         // Telemetry Section
-        TelemetrySection(modifier = Modifier.weight(0.08f))
+        TelemetrySection(battery, altitude, speed, modifier = Modifier.weight(0.08f))
     }
 }
 
 @Composable
-fun OSMMapView(modifier: Modifier = Modifier) {
+fun OSMMapView(dronePosition: GeoPoint, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    var dronePosition by remember { mutableStateOf(GeoPoint(-1.286389, 36.817223)) }
     var mapController by remember { mutableStateOf<org.osmdroid.views.MapController?>(null) }
     var marker by remember { mutableStateOf<Marker?>(null) }
 
@@ -137,23 +162,9 @@ fun OSMMapView(modifier: Modifier = Modifier) {
         ) {
             Icon(Icons.Default.MyLocation, contentDescription = "Recenter", modifier = Modifier.size(20.dp))
         }
-
-        // Comment out this section to stop automatic movement
-        /*
-        LaunchedEffect(Unit) {
-            while (true) {
-                delay(2000)
-                dronePosition = GeoPoint(
-                    dronePosition.latitude + 0.001,
-                    dronePosition.longitude + 0.001
-                )
-                marker?.position = dronePosition
-                mapController?.setCenter(dronePosition)
-            }
-        }
-        */
     }
 }
+
 @Composable
 fun ControlsSection(modifier: Modifier = Modifier) {
     val takeoffScale = remember { Animatable(1f) }
@@ -206,7 +217,7 @@ fun ControlsSection(modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun TelemetrySection(modifier: Modifier = Modifier) {
+fun TelemetrySection(battery: Int, altitude: Double, speed: Double, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -224,7 +235,7 @@ fun TelemetrySection(modifier: Modifier = Modifier) {
         ) {
             Icon(Icons.Default.Height, contentDescription = "Altitude", modifier = Modifier.size(16.dp))
             Text("Altitude", style = MaterialTheme.typography.bodySmall)
-            Text("0m", style = MaterialTheme.typography.bodySmall)
+            Text("${altitude}m", style = MaterialTheme.typography.bodySmall)
         }
 
         // Speed
@@ -234,7 +245,7 @@ fun TelemetrySection(modifier: Modifier = Modifier) {
         ) {
             Icon(Icons.Default.Speed, contentDescription = "Speed", modifier = Modifier.size(16.dp))
             Text("Speed", style = MaterialTheme.typography.bodySmall)
-            Text("0m/s", style = MaterialTheme.typography.bodySmall)
+            Text("${speed}m/s", style = MaterialTheme.typography.bodySmall)
         }
 
         // Battery
@@ -244,7 +255,7 @@ fun TelemetrySection(modifier: Modifier = Modifier) {
         ) {
             Icon(Icons.Default.BatteryFull, contentDescription = "Battery", modifier = Modifier.size(16.dp))
             Text("Battery", style = MaterialTheme.typography.bodySmall)
-            Text("100%", style = MaterialTheme.typography.bodySmall)
+            Text("$battery%", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
