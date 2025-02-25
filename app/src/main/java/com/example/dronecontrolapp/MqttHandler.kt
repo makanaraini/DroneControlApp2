@@ -4,17 +4,22 @@ import android.content.Context
 import android.util.Log
 import org.eclipse.paho.client.mqttv3.*
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
+import javax.net.ssl.SSLSocketFactory
 
 class MqttHandler(context: Context) {
     private var mqttClient: MqttClient? = null
 
-    fun connect(brokerUrl: String, clientId: String) {
+    fun connect(brokerUrl: String, clientId: String, username: String, password: String) {
         try {
             mqttClient = MqttClient(brokerUrl, clientId, MemoryPersistence())
             val options = MqttConnectOptions().apply {
                 isCleanSession = true
                 connectionTimeout = 10
                 keepAliveInterval = 20
+                this.userName = username
+                this.password = password.toCharArray()
+                // Enable TLS/SSL
+                socketFactory = SSLSocketFactory.getDefault()
             }
             mqttClient?.connect(options)
             Log.d("MqttHandler", "Connected to MQTT broker")

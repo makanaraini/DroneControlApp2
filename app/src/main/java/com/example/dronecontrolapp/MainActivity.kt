@@ -61,8 +61,13 @@ fun DroneControlAppUI() {
     var speed by remember { mutableStateOf(0.0) }
 
     LaunchedEffect(Unit) {
-        // Connect to MQTT broker
-        mqttHandler.connect("tcp://your-broker-url:1883", "android-client")
+        // Connect to HiveMQ Cloud broker
+        mqttHandler.connect(
+            brokerUrl = "ssl://72fd58bd8ad34bd088141357462a53e5.s1.eu.hivemq.cloud:8883",
+            clientId = "android-client",
+            username = "drone-app", // Replace with credentials
+            password = "secure-Password012920"  // Replace with credentials
+        )
 
         // Subscribe to topics
         mqttHandler.subscribe("drone/position") { payload ->
