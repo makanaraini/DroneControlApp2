@@ -9,7 +9,7 @@ import javax.net.ssl.SSLSocketFactory
 class MqttHandler(context: Context) {
     private var mqttClient: MqttClient? = null
 
-    fun connect(brokerUrl: String, clientId: String, username: String, password: String) {
+    fun connect(brokerUrl: String, clientId: String, username: String, password: String, onError: (String) -> Unit) {
         try {
             mqttClient = MqttClient(brokerUrl, clientId, MemoryPersistence())
             val options = MqttConnectOptions().apply {
@@ -18,13 +18,14 @@ class MqttHandler(context: Context) {
                 keepAliveInterval = 20
                 this.userName = username
                 this.password = password.toCharArray()
-                // Enable TLS/SSL
                 socketFactory = SSLSocketFactory.getDefault()
             }
             mqttClient?.connect(options)
             Log.d("MqttHandler", "Connected to MQTT broker")
         } catch (e: MqttException) {
-            Log.e("MqttHandler", "Error connecting to MQTT broker: ${e.message}")
+            val errorMsg = "Error connecting to MQTT broker: ${e.message}"
+            Log.e("MqttHandler", errorMsg)
+            onError(errorMsg)
         }
     }
 
@@ -37,6 +38,15 @@ class MqttHandler(context: Context) {
             }
         } catch (e: MqttException) {
             Log.e("MqttHandler", "Error subscribing to topic: ${e.message}")
+        }
+    }
+
+    fun publish(topic: String, message: String) {
+        try {
+            mqttClient?.publish(topic, message.toByteArray(), 0, false)
+            Log.d("MqttHandler", "Published to $topic: $message")
+        } catch (e: MqttException) {
+            Log.e("MqttHandler", "Error publishing to $topic: ${e.message}")
         }
     }
 

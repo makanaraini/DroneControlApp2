@@ -44,7 +44,26 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    DroneControlAppUI()
+                    var showSettings by remember { mutableStateOf(false) }
+                    var brokerUrl by remember { mutableStateOf("ssl://72fd58bd8ad34bd088141357462a53e5.s1.eu.hivemq.cloud:8883") }
+                    var username by remember { mutableStateOf("drone-app") }
+                    var password by remember { mutableStateOf("secure-Password012920") }
+
+                    if (showSettings) {
+                        SettingsScreen(
+                            brokerUrl = brokerUrl,
+                            username = username,
+                            password = password,
+                            onSave = { newBroker, newUser, newPass ->
+                                brokerUrl = newBroker
+                                username = newUser
+                                password = newPass
+                                showSettings = false
+                            }
+                        )
+                    } else {
+                        DroneControlAppUI(brokerUrl, username, password)
+                    }
                 }
             }
         }
@@ -52,58 +71,78 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun DroneControlAppUI() {
+fun DroneControlAppUI(brokerUrl: String, username: String, password: String) {
     val context = LocalContext.current
     val mqttHandler = remember { MqttHandler(context) }
     var dronePosition by remember { mutableStateOf(GeoPoint(-1.286389, 36.817223)) }
     var battery by remember { mutableStateOf(100) }
     var altitude by remember { mutableStateOf(0.0) }
     var speed by remember { mutableStateOf(0.0) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isConnecting by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
-        // Connect to HiveMQ Cloud broker
         mqttHandler.connect(
-            brokerUrl = "ssl://72fd58bd8ad34bd088141357462a53e5.s1.eu.hivemq.cloud:8883",
+            brokerUrl = brokerUrl,
             clientId = "android-client",
-            username = "drone-app", // Replace with credentials
-            password = "secure-Password012920"  // Replace with credentials
+            username = username,
+            password = password,
+            onError = { error -> errorMessage = error }
         )
+        isConnecting = false // Connection attempt completed
 
-        // Subscribe to topics
-        mqttHandler.subscribe("drone/position") { payload ->
-            val (lat, lon) = payload.split(",").map { it.toDouble() }
-            dronePosition = GeoPoint(lat, lon)
-        }
-        mqttHandler.subscribe("drone/battery") { payload ->
-            battery = payload.toInt()
-        }
-        mqttHandler.subscribe("drone/altitude") { payload ->
-            altitude = payload.toDouble()
-        }
-        mqttHandler.subscribe("drone/speed") { payload ->
-            speed = payload.toDouble()
+        if (errorMessage == null) {
+            mqttHandler.subscribe("drone/position") { payload ->
+                val (lat, lon) = payload.split(",").map { it.toDouble() }
+                dronePosition = GeoPoint(lat, lon)
+            }
+            mqttHandler.subscribe("drone/battery") { payload ->
+                battery = payload.toInt()
+            }
+            mqttHandler.subscribe("drone/altitude") { payload ->
+                altitude = payload.toDouble()
+            }
+            mqttHandler.subscribe("drone/speed") { payload ->
+                speed = payload.toDouble()
+            }
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(8.dp)
-    ) {
-        // Map Section
-        Box(modifier = Modifier.weight(0.85f)) {
-            OSMMapView(dronePosition, modifier = Modifier.fillMaxSize())
+    // Show loading indicator
+    if (isConnecting) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
         }
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp)
+        ) {
+            // Display error message if connection fails
+            errorMessage?.let { message ->
+                Text(
+                    text = message,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(8.dp)
+                )
+            }
 
-        Spacer(modifier = Modifier.height(4.dp))
+            // Map Section
+            Box(modifier = Modifier.weight(0.85f)) {
+                OSMMapView(dronePosition, modifier = Modifier.fillMaxSize())
+            }
 
-        // Controls Section
-        ControlsSection(modifier = Modifier.weight(0.07f))
+            Spacer(modifier = Modifier.height(4.dp))
 
-        Spacer(modifier = Modifier.height(4.dp))
+            // Controls Section
+            ControlsSection(mqttHandler, modifier = Modifier.weight(0.07f))
 
-        // Telemetry Section
-        TelemetrySection(battery, altitude, speed, modifier = Modifier.weight(0.08f))
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Telemetry Section
+            TelemetrySection(battery, altitude, speed, modifier = Modifier.weight(0.08f))
+        }
     }
 }
 
@@ -171,7 +210,7 @@ fun OSMMapView(dronePosition: GeoPoint, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun ControlsSection(modifier: Modifier = Modifier) {
+fun ControlsSection(mqttHandler: MqttHandler, modifier: Modifier = Modifier) {
     val takeoffScale = remember { Animatable(1f) }
     val landScale = remember { Animatable(1f) }
     val coroutineScope = rememberCoroutineScope()
@@ -183,13 +222,14 @@ fun ControlsSection(modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Takeoff Button with Animation
+        // Takeoff Button
         Button(
             onClick = { 
                 coroutineScope.launch {
                     takeoffScale.animateTo(0.9f, animationSpec = spring())
                     takeoffScale.animateTo(1f, animationSpec = spring())
                 }
+                mqttHandler.publish("drone/commands", "takeoff")
             },
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
             modifier = Modifier
@@ -201,13 +241,14 @@ fun ControlsSection(modifier: Modifier = Modifier) {
             Text("Takeoff", style = MaterialTheme.typography.labelSmall)
         }
 
-        // Land Button with Animation
+        // Land Button
         Button(
             onClick = {
                 coroutineScope.launch {
                     landScale.animateTo(0.9f, animationSpec = spring())
                     landScale.animateTo(1f, animationSpec = spring())
                 }
+                mqttHandler.publish("drone/commands", "land")
             },
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
             modifier = Modifier
@@ -265,10 +306,49 @@ fun TelemetrySection(battery: Int, altitude: Double, speed: Double, modifier: Mo
     }
 }
 
+@Composable
+fun SettingsScreen(
+    brokerUrl: String,
+    username: String,
+    password: String,
+    onSave: (String, String, String) -> Unit
+) {
+    var broker by remember { mutableStateOf(brokerUrl) }
+    var user by remember { mutableStateOf(username) }
+    var pass by remember { mutableStateOf(password) }
+
+    Column(modifier = Modifier.padding(16.dp)) {
+        OutlinedTextField(
+            value = broker,
+            onValueChange = { broker = it },
+            label = { Text("Broker URL") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedTextField(
+            value = user,
+            onValueChange = { user = it },
+            label = { Text("Username") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        OutlinedTextField(
+            value = pass,
+            onValueChange = { pass = it },
+            label = { Text("Password") },
+            modifier = Modifier.fillMaxWidth()
+        )
+        Button(
+            onClick = { onSave(broker, user, pass) },
+            modifier = Modifier.align(Alignment.End)
+        ) {
+            Text("Save")
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Composable
 fun DefaultPreview() {
     DroneControlAppTheme {
-        DroneControlAppUI()
+        DroneControlAppUI("ssl://72fd58bd8ad34bd088141357462a53e5.s1.eu.hivemq.cloud:8883", "drone-app", "secure-Password012920")
     }
 }
