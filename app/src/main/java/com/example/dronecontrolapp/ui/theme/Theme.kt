@@ -4,33 +4,129 @@ import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
+// Modern color palette
+private val md_theme_light_primary = Color(0xFF0B57D0)        // Deep Blue
+private val md_theme_light_onPrimary = Color(0xFFFFFFFF)      // White
+private val md_theme_light_secondary = Color(0xFF2AC9DB)      // Bright Cyan
+private val md_theme_light_onSecondary = Color(0xFF000000)    // Black
+private val md_theme_light_error = Color(0xFFBA1A1A)          // Error Red
+private val md_theme_light_background = Color(0xFFFBFCFE)     // Off White
+private val md_theme_light_surface = Color(0xFFFFFFFF)        // White
+private val md_theme_light_tertiaryContainer = Color(0xFFE8F0FE) // Light Blue Container
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
+    primary = md_theme_light_primary,
+    onPrimary = md_theme_light_onPrimary,
+    secondary = md_theme_light_secondary,
+    onSecondary = md_theme_light_onSecondary,
+    error = md_theme_light_error,
+    background = md_theme_light_background,
+    surface = md_theme_light_surface,
+    tertiaryContainer = md_theme_light_tertiaryContainer,
+    onTertiaryContainer = md_theme_light_primary
+)
 
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+// Modern color palette - Dark Theme
+private val md_theme_dark_primary = Color(0xFF90B4FF)        // Light Blue
+private val md_theme_dark_onPrimary = Color(0xFF00297A)      // Dark Blue
+private val md_theme_dark_secondary = Color(0xFF86E6EF)      // Light Cyan
+private val md_theme_dark_onSecondary = Color(0xFF000000)    // Black
+private val md_theme_dark_error = Color(0xFFFFB4AB)          // Light Red
+private val md_theme_dark_background = Color(0xFF1A1C1E)     // Dark Background
+private val md_theme_dark_surface = Color(0xFF121416)        // Even Darker Surface
+private val md_theme_dark_tertiaryContainer = Color(0xFF203654) // Dark Blue Container
+private val md_theme_dark_onTertiaryContainer = Color(0xFFD1E4FF) // Light Blue Text
+
+private val DarkColorScheme = darkColorScheme(
+    primary = md_theme_dark_primary,
+    onPrimary = md_theme_dark_onPrimary,
+    secondary = md_theme_dark_secondary,
+    onSecondary = md_theme_dark_onSecondary,
+    error = md_theme_dark_error,
+    background = md_theme_dark_background,
+    surface = md_theme_dark_surface,
+    tertiaryContainer = md_theme_dark_tertiaryContainer,
+    onTertiaryContainer = md_theme_dark_onTertiaryContainer
+)
+
+// Modern Typography
+val ModernTypography = Typography(
+    displayLarge = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Bold,
+        fontSize = 36.sp
+    ),
+    displayMedium = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Bold,
+        fontSize = 28.sp
+    ),
+    displaySmall = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Bold,
+        fontSize = 24.sp
+    ),
+    headlineLarge = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Bold,
+        fontSize = 22.sp
+    ),
+    headlineMedium = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Bold,
+        fontSize = 20.sp
+    ),
+    headlineSmall = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Bold,
+        fontSize = 18.sp
+    ),
+    bodyLarge = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Normal,
+        fontSize = 16.sp,
+        lineHeight = 24.sp
+    ),
+    bodyMedium = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        lineHeight = 20.sp
+    ),
+    bodySmall = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Normal,
+        fontSize = 12.sp,
+        lineHeight = 16.sp
+    ),
+    labelLarge = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp
+    ),
+    labelMedium = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Medium,
+        fontSize = 12.sp
+    ),
+    labelSmall = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Medium,
+        fontSize = 10.sp
+    )
 )
 
 @Composable
@@ -52,7 +148,7 @@ fun DroneControlAppTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = ModernTypography,
         content = content
     )
 }
