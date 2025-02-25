@@ -99,6 +99,11 @@ fun MainActivityUI() {
     var username by remember { mutableStateOf("drone-app") }
     var password by remember { mutableStateOf("secure-Password012920") }
 
+    // Add logging for screen transitions
+    LaunchedEffect(showSettings) {
+        AppLogger.debug("Screen changed: ${if (showSettings) "Settings" else "Main"}")
+    }
+
     Crossfade(
         targetState = showSettings,
         label = "ScreenTransition"
@@ -133,27 +138,37 @@ fun DroneControlAppUI(brokerUrl: String, username: String, password: String) {
     var isConnecting by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
+        AppLogger.info("Attempting MQTT connection to: $brokerUrl")
         mqttHandler.connect(
             brokerUrl = brokerUrl,
             clientId = "android-client",
             username = username,
             password = password,
-            onError = { error -> errorMessage = error }
+            onError = { error -> 
+                errorMessage = error
+                AppLogger.error("MQTT connection error: $error") 
+            }
         )
         isConnecting = false // Connection attempt completed
+        AppLogger.debug("MQTT connection attempt completed")
 
         if (errorMessage == null) {
+            AppLogger.info("MQTT connection successful, subscribing to topics")
             mqttHandler.subscribe("drone/position") { payload ->
+                AppLogger.debug("Received position update: $payload")
                 val (lat, lon) = payload.split(",").map { it.toDouble() }
                 dronePosition = GeoPoint(lat, lon)
             }
             mqttHandler.subscribe("drone/battery") { payload ->
+                AppLogger.debug("Received battery update: $payload")
                 battery = payload.toInt()
             }
             mqttHandler.subscribe("drone/altitude") { payload ->
+                AppLogger.debug("Received altitude update: $payload")
                 altitude = payload.toDouble()
             }
             mqttHandler.subscribe("drone/speed") { payload ->
+                AppLogger.debug("Received speed update: $payload")
                 speed = payload.toDouble()
             }
         }
@@ -205,6 +220,7 @@ fun OSMMapView(dronePosition: GeoPoint, modifier: Modifier = Modifier) {
 
     LaunchedEffect(dronePosition) {
         // Animate the marker's position
+        AppLogger.debug("Drone position updated: ${dronePosition.latitude}, ${dronePosition.longitude}")
         animatedPosition = dronePosition
     }
 
@@ -254,7 +270,10 @@ fun OSMMapView(dronePosition: GeoPoint, modifier: Modifier = Modifier) {
         )
 
         FloatingActionButton(
-            onClick = { mapController?.setCenter(animatedPosition) }, // Use animatedPosition here
+            onClick = { 
+                AppLogger.debug("Map recentered to drone position")
+                mapController?.setCenter(animatedPosition) 
+            },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(8.dp)
@@ -285,6 +304,7 @@ fun ControlsSection(mqttHandler: MqttHandler, modifier: Modifier = Modifier) {
                     takeoffScale.animateTo(0.9f, animationSpec = spring(stiffness = 300f))
                     takeoffScale.animateTo(1f, animationSpec = spring(stiffness = 300f))
                 }
+                AppLogger.info("User command: Takeoff initiated")
                 mqttHandler.publish("drone/commands", "takeoff")
             },
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
@@ -304,6 +324,7 @@ fun ControlsSection(mqttHandler: MqttHandler, modifier: Modifier = Modifier) {
                     landScale.animateTo(0.9f, animationSpec = spring(stiffness = 300f))
                     landScale.animateTo(1f, animationSpec = spring(stiffness = 300f))
                 }
+                AppLogger.info("User command: Land initiated")
                 mqttHandler.publish("drone/commands", "land")
             },
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
@@ -320,6 +341,11 @@ fun ControlsSection(mqttHandler: MqttHandler, modifier: Modifier = Modifier) {
 
 @Composable
 fun TelemetrySection(battery: Int, altitude: Double, speed: Double, modifier: Modifier = Modifier) {
+    // Log significant telemetry changes
+    LaunchedEffect(battery, altitude, speed) {
+        AppLogger.debug("Telemetry updated - Battery: $battery%, Altitude: ${altitude}m, Speed: ${speed}m/s")
+    }
+    
     val animatedBattery by animateFloatAsState(targetValue = battery.toFloat(), label = "BatteryAnimation")
     val animatedAltitude by animateFloatAsState(targetValue = altitude.toFloat(), label = "AltitudeAnimation")
     val animatedSpeed by animateFloatAsState(targetValue = speed.toFloat(), label = "SpeedAnimation")
@@ -436,7 +462,10 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth()
         )
         Button(
-            onClick = { onSave(broker, user, pass) },
+            onClick = { 
+                AppLogger.info("Settings saved - Broker URL: $broker")
+                onSave(broker, user, pass) 
+            },
             modifier = Modifier.align(Alignment.End)
         ) {
             Text("Save")
