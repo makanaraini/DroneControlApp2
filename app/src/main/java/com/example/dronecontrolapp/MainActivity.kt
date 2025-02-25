@@ -20,6 +20,10 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.platform.LocalContext
+import android.content.Context
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.ui.Alignment
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
@@ -38,6 +42,13 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Initialize OSMDroid configuration before setting content
+        Configuration.getInstance().load(
+            applicationContext,
+            getSharedPreferences("osmdroid", Context.MODE_PRIVATE)
+        )
+
         setContent {
             DroneControlAppTheme {
                 Surface(
@@ -45,11 +56,14 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     var showSettings by remember { mutableStateOf(false) }
+
+                    // Settings state variables
                     var brokerUrl by remember { mutableStateOf("ssl://72fd58bd8ad34bd088141357462a53e5.s1.eu.hivemq.cloud:8883") }
                     var username by remember { mutableStateOf("drone-app") }
                     var password by remember { mutableStateOf("secure-Password012920") }
 
                     if (showSettings) {
+                        // Show Settings Screen
                         SettingsScreen(
                             brokerUrl = brokerUrl,
                             username = username,
@@ -62,7 +76,31 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     } else {
-                        DroneControlAppUI(brokerUrl, username, password)
+                        // Main App UI
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.Top,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            // Toggle Settings Button
+                            IconButton(
+                                onClick = { showSettings = true },
+                                modifier = Modifier.padding(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = "Settings",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            // Drone Control App UI
+                            DroneControlAppUI(
+                                brokerUrl = brokerUrl,
+                                username = username,
+                                password = password
+                            )
+                        }
                     }
                 }
             }
@@ -71,9 +109,15 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun DroneControlAppUI(brokerUrl: String, username: String, password: String) {
+fun DroneControlAppUI(
+    brokerUrl: String,
+    username: String,
+    password: String
+) {
     val context = LocalContext.current
     val mqttHandler = remember { MqttHandler(context) }
+
+    // State variables
     var dronePosition by remember { mutableStateOf(GeoPoint(-1.286389, 36.817223)) }
     var battery by remember { mutableStateOf(100) }
     var altitude by remember { mutableStateOf(0.0) }
@@ -81,64 +125,93 @@ fun DroneControlAppUI(brokerUrl: String, username: String, password: String) {
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isConnecting by remember { mutableStateOf(true) }
 
+    // MQTT connection and subscription logic
     LaunchedEffect(Unit) {
-        mqttHandler.connect(
-            brokerUrl = brokerUrl,
-            clientId = "android-client",
-            username = username,
-            password = password,
-            onError = { error -> errorMessage = error }
-        )
-        isConnecting = false // Connection attempt completed
+        try {
+            mqttHandler.connect(
+                brokerUrl = brokerUrl,
+                clientId = "android-client",
+                username = username,
+                password = password,
+                onError = { error ->
+                    errorMessage = error
+                }
+            )
+            isConnecting = false // Connection attempt completed
 
-        if (errorMessage == null) {
-            mqttHandler.subscribe("drone/position") { payload ->
-                val (lat, lon) = payload.split(",").map { it.toDouble() }
-                dronePosition = GeoPoint(lat, lon)
+            if (errorMessage == null) {
+                mqttHandler.subscribe("drone/position") { payload ->
+                    val (lat, lon) = payload.split(",").map { it.toDouble() }
+                    dronePosition = GeoPoint(lat, lon)
+                }
+                mqttHandler.subscribe("drone/battery") { payload ->
+                    battery = payload.toInt()
+                }
+                mqttHandler.subscribe("drone/altitude") { payload ->
+                    altitude = payload.toDouble()
+                }
+                mqttHandler.subscribe("drone/speed") { payload ->
+                    speed = payload.toDouble()
+                }
             }
-            mqttHandler.subscribe("drone/battery") { payload ->
-                battery = payload.toInt()
-            }
-            mqttHandler.subscribe("drone/altitude") { payload ->
-                altitude = payload.toDouble()
-            }
-            mqttHandler.subscribe("drone/speed") { payload ->
-                speed = payload.toDouble()
-            }
+        } catch (e: Exception) {
+            errorMessage = "Connection failed: ${e.message}"
+            isConnecting = false
         }
     }
 
-    // Show loading indicator
+    // UI Composition
     if (isConnecting) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
+        // Show loading indicator while connecting
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(
+                color = MaterialTheme.colorScheme.primary
+            )
         }
-    } else {
+    } else if (errorMessage != null) {
+        // Display error message if connection fails
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(8.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Display error message if connection fails
-            errorMessage?.let { message ->
-                Text(
-                    text = message,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(8.dp)
-                )
+            Text(
+                text = errorMessage!!,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = {
+                    errorMessage = null
+                    isConnecting = true // Retry connection
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+            ) {
+                Text("Retry Connection")
             }
-
+        }
+    } else {
+        // Main UI when connected successfully
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
             // Map Section
             Box(modifier = Modifier.weight(0.85f)) {
                 OSMMapView(dronePosition, modifier = Modifier.fillMaxSize())
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
-
             // Controls Section
             ControlsSection(mqttHandler, modifier = Modifier.weight(0.07f))
-
-            Spacer(modifier = Modifier.height(4.dp))
 
             // Telemetry Section
             TelemetrySection(battery, altitude, speed, modifier = Modifier.weight(0.08f))
@@ -147,11 +220,15 @@ fun DroneControlAppUI(brokerUrl: String, username: String, password: String) {
 }
 
 @Composable
-fun OSMMapView(dronePosition: GeoPoint, modifier: Modifier = Modifier) {
+fun OSMMapView(
+    dronePosition: GeoPoint,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
     var mapController by remember { mutableStateOf<org.osmdroid.views.MapController?>(null) }
     var marker by remember { mutableStateOf<Marker?>(null) }
 
+    // Load OSMDroid configuration
     LaunchedEffect(Unit) {
         Configuration.getInstance().load(
             context,
@@ -160,36 +237,34 @@ fun OSMMapView(dronePosition: GeoPoint, modifier: Modifier = Modifier) {
     }
 
     Box(modifier = modifier) {
+        // AndroidView for the OSM MapView
         AndroidView(
             factory = { ctx ->
                 MapView(ctx).apply {
                     setTileSource(TileSourceFactory.MAPNIK)
                     setMultiTouchControls(true)
 
+                    // Initialize map controller
                     mapController = this.controller as org.osmdroid.views.MapController
                     mapController?.setZoom(15.0)
                     mapController?.setCenter(dronePosition)
 
-                    val originalIcon = ContextCompat.getDrawable(ctx, R.drawable.drone_icon)
-
-                    val droneIcon = originalIcon?.let {
-                        val width = 50  // Set desired width (in pixels)
-                        val height = 50 // Set desired height (in pixels)
-                        val scaledBitmap = Bitmap.createScaledBitmap(
-                            (it as BitmapDrawable).bitmap, width, height, false
-                        )
-                        BitmapDrawable(ctx.resources, scaledBitmap)
-                    }
-
+                    // Add drone marker
                     marker = Marker(this).apply {
                         position = dronePosition
-                        icon = droneIcon
+                        icon = createScaledDrawable(ctx, R.drawable.drone_icon, 50, 50)
                         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                         title = "Drone Location"
                     }
-                    this.overlays.add(marker)
-                    this.invalidate()
+                    overlays.add(marker)
+                    invalidate()
                 }
+            },
+            update = { mapView ->
+                // Update the map and marker when the drone position changes
+                mapController?.setCenter(dronePosition)
+                marker?.position = dronePosition
+                mapView.invalidate()
             },
             modifier = Modifier
                 .fillMaxSize()
@@ -197,22 +272,36 @@ fun OSMMapView(dronePosition: GeoPoint, modifier: Modifier = Modifier) {
                 .clip(MaterialTheme.shapes.medium)
         )
 
+        // FloatingActionButton to recenter the map
         FloatingActionButton(
             onClick = { mapController?.setCenter(dronePosition) },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(8.dp)
-                .size(40.dp)
+                .size(40.dp),
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+            containerColor = MaterialTheme.colorScheme.primary
         ) {
-            Icon(Icons.Default.MyLocation, contentDescription = "Recenter", modifier = Modifier.size(20.dp))
+            Icon(
+                Icons.Default.MyLocation,
+                contentDescription = "Recenter",
+                modifier = Modifier.size(20.dp)
+            )
         }
+    }
+}
+
+// Helper function to scale drawable resources
+private fun createScaledDrawable(context: Context, @DrawableRes resId: Int, widthPx: Int, heightPx: Int): Drawable? {
+    return ContextCompat.getDrawable(context, resId)?.let { drawable ->
+        val bitmap = (drawable as BitmapDrawable).bitmap
+        val scaledBitmap = Bitmap.createScaledBitmap(bitmap, widthPx, heightPx, false)
+        BitmapDrawable(context.resources, scaledBitmap)
     }
 }
 
 @Composable
 fun ControlsSection(mqttHandler: MqttHandler, modifier: Modifier = Modifier) {
-    val takeoffScale = remember { Animatable(1f) }
-    val landScale = remember { Animatable(1f) }
     val coroutineScope = rememberCoroutineScope()
 
     Row(
@@ -222,43 +311,62 @@ fun ControlsSection(mqttHandler: MqttHandler, modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Takeoff Button
-        Button(
-            onClick = { 
-                coroutineScope.launch {
-                    takeoffScale.animateTo(0.9f, animationSpec = spring())
-                    takeoffScale.animateTo(1f, animationSpec = spring())
-                }
-                mqttHandler.publish("drone/commands", "takeoff")
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-            modifier = Modifier
-                .scale(takeoffScale.value)
-                .height(32.dp),
+        // Reusable composable function for animated buttons
+        fun AnimatedButton(
+            label: String,
+            icon: ImageVector,
+            contentDescription: String,
+            command: String,
+            buttonColor: Color,
+            scale: Animatable
         ) {
-            Icon(Icons.Default.FlightTakeoff, contentDescription = "Takeoff", modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("Takeoff", style = MaterialTheme.typography.labelSmall)
+            Button(
+                onClick = {
+                    coroutineScope.launch {
+                        scale.animateTo(0.9f, animationSpec = spring())
+                        scale.animateTo(1f, animationSpec = spring())
+                    }
+                    mqttHandler.publish("drone/commands", command)
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = buttonColor),
+                modifier = Modifier
+                    .scale(scale.value)
+                    .height(32.dp)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = contentDescription,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
         }
 
+        // Takeoff Button
+        val takeoffScale = remember { Animatable(1f) }
+        AnimatedButton(
+            label = "Takeoff",
+            icon = Icons.Default.FlightTakeoff,
+            contentDescription = "Takeoff",
+            command = "takeoff",
+            buttonColor = MaterialTheme.colorScheme.primary,
+            scale = takeoffScale
+        )
+
         // Land Button
-        Button(
-            onClick = {
-                coroutineScope.launch {
-                    landScale.animateTo(0.9f, animationSpec = spring())
-                    landScale.animateTo(1f, animationSpec = spring())
-                }
-                mqttHandler.publish("drone/commands", "land")
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-            modifier = Modifier
-                .scale(landScale.value)
-                .height(32.dp)
-        ) {
-            Icon(Icons.Default.FlightLand, contentDescription = "Land", modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("Land", style = MaterialTheme.typography.labelSmall)
-        }
+        val landScale = remember { Animatable(1f) }
+        AnimatedButton(
+            label = "Land",
+            icon = Icons.Default.FlightLand,
+            contentDescription = "Land",
+            command = "land",
+            buttonColor = MaterialTheme.colorScheme.error,
+            scale = landScale
+        )
     }
 }
 
@@ -269,40 +377,56 @@ fun TelemetrySection(battery: Int, altitude: Double, speed: Double, modifier: Mo
             .fillMaxWidth()
             .wrapContentHeight()
             .horizontalScroll(rememberScrollState())
-            .background(MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.shapes.medium)
+            .background(
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                shape = MaterialTheme.shapes.medium
+            )
             .padding(4.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Altitude
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 8.dp)
-        ) {
-            Icon(Icons.Default.Height, contentDescription = "Altitude", modifier = Modifier.size(16.dp))
-            Text("Altitude", style = MaterialTheme.typography.bodySmall)
-            Text("${altitude}m", style = MaterialTheme.typography.bodySmall)
+        // Reusable composable function for telemetry items
+        fun TelemetryItem(icon: ImageVector, label: String, value: String) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = label,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
+
+        // Altitude
+        TelemetryItem(
+            icon = Icons.Default.Height,
+            label = "Altitude",
+            value = "${altitude}m"
+        )
 
         // Speed
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 8.dp)
-        ) {
-            Icon(Icons.Default.Speed, contentDescription = "Speed", modifier = Modifier.size(16.dp))
-            Text("Speed", style = MaterialTheme.typography.bodySmall)
-            Text("${speed}m/s", style = MaterialTheme.typography.bodySmall)
-        }
+        TelemetryItem(
+            icon = Icons.Default.Speed,
+            label = "Speed",
+            value = "${speed}m/s"
+        )
 
         // Battery
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 8.dp)
-        ) {
-            Icon(Icons.Default.BatteryFull, contentDescription = "Battery", modifier = Modifier.size(16.dp))
-            Text("Battery", style = MaterialTheme.typography.bodySmall)
-            Text("$battery%", style = MaterialTheme.typography.bodySmall)
-        }
+        TelemetryItem(
+            icon = Icons.Default.BatteryFull,
+            label = "Battery",
+            value = "$battery%"
+        )
     }
 }
 
@@ -313,31 +437,66 @@ fun SettingsScreen(
     password: String,
     onSave: (String, String, String) -> Unit
 ) {
-    var broker by remember { mutableStateOf(brokerUrl) }
-    var user by remember { mutableStateOf(username) }
-    var pass by remember { mutableStateOf(password) }
+    var broker by rememberSaveable { mutableStateOf(brokerUrl) }
+    var user by rememberSaveable { mutableStateOf(username) }
+    var pass by rememberSaveable { mutableStateOf(password) }
 
-    Column(modifier = Modifier.padding(16.dp)) {
+    Column(
+        modifier = Modifier
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
         OutlinedTextField(
             value = broker,
-            onValueChange = { broker = it },
+            onValueChange = { newValue ->
+                if (newValue.length <= 256) {
+                    broker = newValue
+                }
+            },
             label = { Text("Broker URL") },
+            singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         OutlinedTextField(
             value = user,
-            onValueChange = { user = it },
+            onValueChange = { newValue ->
+                if (newValue.length <= 64) {
+                    user = newValue
+                }
+            },
             label = { Text("Username") },
+            singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         OutlinedTextField(
             value = pass,
-            onValueChange = { pass = it },
+            onValueChange = { newValue ->
+                if (newValue.length <= 64) {
+                    pass = newValue
+                }
+            },
             label = { Text("Password") },
+            visualTransformation = PasswordVisualTransformation(),
+            singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         Button(
-            onClick = { onSave(broker, user, pass) },
+            onClick = {
+                if (broker.isNotBlank() && user.isNotBlank() && pass.isNotBlank()) {
+                    onSave(broker, user, pass)
+                } else {
+                    Toast.makeText(LocalContext.current, "All fields are required", Toast.LENGTH_SHORT).show()
+                }
+            },
             modifier = Modifier.align(Alignment.End)
         ) {
             Text("Save")
