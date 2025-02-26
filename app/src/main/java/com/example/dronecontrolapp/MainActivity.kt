@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -34,9 +35,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.Terrain
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -121,13 +125,23 @@ fun MainActivityUI() {
                 }
             )
         } else {
-            DroneControlAppUI(brokerUrl, username, password)
+            DroneControlAppUI(
+                brokerUrl = brokerUrl, 
+                username = username, 
+                password = password,
+                onNavigateToSettings = { showSettings = true }
+            )
         }
     }
 }
 
 @Composable
-fun DroneControlAppUI(brokerUrl: String, username: String, password: String) {
+fun DroneControlAppUI(
+    brokerUrl: String, 
+    username: String, 
+    password: String,
+    onNavigateToSettings: () -> Unit
+) {
     val context = LocalContext.current
     val mqttHandler = remember { MqttHandler(context) }
     var dronePosition by remember { mutableStateOf(GeoPoint(-1.286389, 36.817223)) }
@@ -136,40 +150,73 @@ fun DroneControlAppUI(brokerUrl: String, username: String, password: String) {
     var speed by remember { mutableDoubleStateOf(0.0) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var isConnecting by remember { mutableStateOf(true) }
+    var connectionStatus by remember { mutableStateOf("Initializing...") }
 
     LaunchedEffect(Unit) {
         AppLogger.info("Attempting MQTT connection to: $brokerUrl")
-        mqttHandler.connect(
-            brokerUrl = brokerUrl,
-            clientId = "android-client",
-            username = username,
-            password = password,
-            onError = { error -> 
-                errorMessage = error
-                AppLogger.error("MQTT connection error: $error") 
-            }
-        )
-        isConnecting = false // Connection attempt completed
+        connectionStatus = "Connecting to $brokerUrl..."
+        
+        try {
+            mqttHandler.connect(
+                brokerUrl = brokerUrl,
+                clientId = "android-client-${System.currentTimeMillis()}",
+                username = username,
+                password = password,
+                onSuccess = { 
+                    connectionStatus = "Connected successfully to MQTT broker!"
+                    AppLogger.info("MQTT connection success callback triggered")
+                },
+                onError = { error -> 
+                    errorMessage = error
+                    connectionStatus = "Connection failed: $error"
+                    AppLogger.error("MQTT connection error: $error") 
+                }
+            )
+        } catch (e: Exception) {
+            connectionStatus = "Exception during connection: ${e.message}"
+            AppLogger.error("Exception during MQTT connection", e)
+        }
+        
+        isConnecting = false
         AppLogger.debug("MQTT connection attempt completed")
 
         if (errorMessage == null) {
             AppLogger.info("MQTT connection successful, subscribing to topics")
             mqttHandler.subscribe("drone/position") { payload ->
                 AppLogger.debug("Received position update: $payload")
-                val (lat, lon) = payload.split(",").map { it.toDouble() }
-                dronePosition = GeoPoint(lat, lon)
+                try {
+                    // Parse JSON position data
+                    val jsonObject = org.json.JSONObject(payload)
+                    val latitude = jsonObject.getDouble("latitude")
+                    val longitude = jsonObject.getDouble("longitude")
+                    dronePosition = GeoPoint(latitude, longitude)
+                } catch (e: Exception) {
+                    AppLogger.error("Error parsing position data: ${e.message}")
+                }
             }
             mqttHandler.subscribe("drone/battery") { payload ->
                 AppLogger.debug("Received battery update: $payload")
-                battery = payload.toInt()
+                try {
+                    battery = payload.toInt()
+                } catch (e: Exception) {
+                    AppLogger.error("Error parsing battery data: ${e.message}")
+                }
             }
             mqttHandler.subscribe("drone/altitude") { payload ->
                 AppLogger.debug("Received altitude update: $payload")
-                altitude = payload.toDouble()
+                try {
+                    altitude = payload.toDouble()
+                } catch (e: Exception) {
+                    AppLogger.error("Error parsing altitude data: ${e.message}")
+                }
             }
             mqttHandler.subscribe("drone/speed") { payload ->
                 AppLogger.debug("Received speed update: $payload")
-                speed = payload.toDouble()
+                try {
+                    speed = payload.toDouble()
+                } catch (e: Exception) {
+                    AppLogger.error("Error parsing speed data: ${e.message}")
+                }
             }
         }
     }
@@ -185,6 +232,27 @@ fun DroneControlAppUI(brokerUrl: String, username: String, password: String) {
                 .fillMaxSize()
                 .padding(8.dp)
         ) {
+            // Add app bar with settings button
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Drone Control",
+                    style = MaterialTheme.typography.titleLarge
+                )
+                
+                IconButton(onClick = onNavigateToSettings) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Settings"
+                    )
+                }
+            }
+
             // Display error message if connection fails
             errorMessage?.let { message ->
                 Text(
@@ -208,9 +276,22 @@ fun DroneControlAppUI(brokerUrl: String, username: String, password: String) {
 
             // Telemetry Section
             TelemetrySection(battery, altitude, speed, modifier = Modifier.weight(0.08f))
+
+            // Connection status
+            Text(
+                text = connectionStatus,
+                color = if (connectionStatus.startsWith("Connected")) 
+                    MaterialTheme.colorScheme.primary 
+                else if (connectionStatus.startsWith("Connection failed") || connectionStatus.startsWith("Exception")) 
+                    MaterialTheme.colorScheme.error
+                else 
+                    MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(8.dp)
+            )
         }
     }
 }
+
 @Composable
 fun OSMMapView(dronePosition: GeoPoint, modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -340,94 +421,133 @@ fun ControlsSection(mqttHandler: MqttHandler, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun TelemetrySection(battery: Int, altitude: Double, speed: Double, modifier: Modifier = Modifier) {
+fun TelemetrySection(
+    battery: Int,
+    altitude: Double,
+    speed: Double,
+    modifier: Modifier = Modifier
+) {
     // Log significant telemetry changes
     LaunchedEffect(battery, altitude, speed) {
         AppLogger.debug("Telemetry updated - Battery: $battery%, Altitude: ${altitude}m, Speed: ${speed}m/s")
     }
-    
-    val animatedBattery by animateFloatAsState(targetValue = battery.toFloat(), label = "BatteryAnimation")
-    val animatedAltitude by animateFloatAsState(targetValue = altitude.toFloat(), label = "AltitudeAnimation")
-    val animatedSpeed by animateFloatAsState(targetValue = speed.toFloat(), label = "SpeedAnimation")
 
-    Row(
+    val animatedBattery by animateFloatAsState(
+        targetValue = battery.toFloat(),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "BatteryAnimation"
+    )
+    val animatedAltitude by animateFloatAsState(
+        targetValue = altitude.toFloat(),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "AltitudeAnimation"
+    )
+    val animatedSpeed by animateFloatAsState(
+        targetValue = speed.toFloat(),
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "SpeedAnimation"
+    )
+
+    // Determine battery icon dynamically
+    val batteryIcon = when {
+        battery > 80 -> Icons.Default.BatteryFull
+        battery > 50 -> Icons.Default.BatteryChargingFull
+        battery > 20 -> Icons.Default.BatteryStd
+        else -> Icons.Default.BatteryAlert
+    }
+
+    Card(
         modifier = modifier
             .fillMaxWidth()
-            .wrapContentHeight()
-            .horizontalScroll(rememberScrollState())
-            .background(MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.shapes.medium)
             .padding(8.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 4.dp
+        )
     ) {
-        // Altitude
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 12.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                Icons.Default.Height,
-                contentDescription = "Altitude",
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.onTertiaryContainer
+            // Altitude
+            TelemetryItem(
+                icon = Icons.Outlined.Terrain,
+                label = "Altitude",
+                value = "${animatedAltitude.toInt()}m",
+                modifier = Modifier.weight(1f)
             )
-            Text(
-                "Altitude",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer
-            )
-            Text(
-                "${animatedAltitude.toInt()}m",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer
-            )
-        }
 
-        // Speed
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 12.dp)
-        ) {
-            Icon(
-                Icons.Default.Speed,
-                contentDescription = "Speed",
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.onTertiaryContainer
+            // Divider
+            HorizontalDivider(
+                modifier = Modifier
+                    .height(40.dp)
+                    .width(1.dp),
+                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.3f)
             )
-            Text(
-                "Speed",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer
-            )
-            Text(
-                "${animatedSpeed.toInt()}m/s",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer
-            )
-        }
 
-        // Battery
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 12.dp)
-        ) {
-            Icon(
-                Icons.Default.BatteryFull,
-                contentDescription = "Battery",
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.onTertiaryContainer
+            // Speed
+            TelemetryItem(
+                icon = Icons.Default.Speed,
+                label = "Speed",
+                value = "${animatedSpeed.toInt()}m/s",
+                modifier = Modifier.weight(1f)
             )
-            Text(
-                "Battery",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer
+
+            // Divider
+            HorizontalDivider(
+                modifier = Modifier
+                    .height(40.dp)
+                    .width(1.dp),
+                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.3f)
             )
-            Text(
-                "${animatedBattery.toInt()}%",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onTertiaryContainer
+
+            // Battery
+            TelemetryItem(
+                icon = batteryIcon,
+                label = "Battery",
+                value = "${animatedBattery.toInt()}%",
+                modifier = Modifier.weight(1f)
             )
         }
+    }
+}
+
+@Composable
+private fun TelemetryItem(
+    icon: ImageVector,
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = modifier.padding(4.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onTertiaryContainer
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onTertiaryContainer,
+            maxLines = 1
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onTertiaryContainer,
+            maxLines = 1
+        )
     }
 }
 
@@ -477,6 +597,11 @@ fun SettingsScreen(
 @Composable
 fun DefaultPreview() {
     DroneControlAppTheme {
-        DroneControlAppUI("ssl://72fd58bd8ad34bd088141357462a53e5.s1.eu.hivemq.cloud:8883", "drone-app", "secure-Password012920")
+        DroneControlAppUI(
+            brokerUrl = "ssl://72fd58bd8ad34bd088141357462a53e5.s1.eu.hivemq.cloud:8883", 
+            username = "drone-app", 
+            password = "secure-Password012920",
+            onNavigateToSettings = {}  // Add empty function for preview
+        )
     }
 }

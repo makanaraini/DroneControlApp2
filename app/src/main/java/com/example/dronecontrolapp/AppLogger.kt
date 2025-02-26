@@ -19,7 +19,13 @@ object AppLogger {
     }
 
     fun error(message: String, throwable: Throwable? = null) {
-        if (isLoggingEnabled) Log.e(TAG, message, throwable)
+        if (isLoggingEnabled) {
+            if (throwable != null) {
+                Log.e(TAG, message, throwable)
+            } else {
+                Log.e(TAG, message)
+            }
+        }
     }
 
     fun enableLogging(enabled: Boolean) {
