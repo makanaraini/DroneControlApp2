@@ -13,9 +13,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,13 +32,18 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Terrain
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import org.json.JSONObject
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.dronecontrolapp.ui.*
+import com.example.dronecontrolapp.viewmodel.DroneViewModel
+import androidx.compose.material3.TopAppBarDefaults
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,14 +54,293 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    var showMainUI by remember { mutableStateOf(false) }
-
-                    if (showMainUI) {
-                        MainActivityUI() // Show the main UI after the splash screen
+                    var showSplash by remember { mutableStateOf(true) }
+                    
+                    if (showSplash) {
+                        FuturisticSplashScreen(onLoadingComplete = { showSplash = false })
                     } else {
-                        SplashScreen(onLoadingComplete = { showMainUI = true }) // Show the splash screen
+                        MainApp()
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun MainApp() {
+    val droneViewModel: DroneViewModel = viewModel(
+        factory = DroneViewModel.Factory(LocalContext.current)
+    )
+    
+    var showSettings by remember { mutableStateOf(false) }
+    
+    // Initialize connection on first launch
+    LaunchedEffect(Unit) {
+        droneViewModel.connect()
+    }
+    
+    Crossfade(
+        targetState = showSettings,
+        label = "ScreenTransition"
+    ) { isSettingsVisible ->
+        if (isSettingsVisible) {
+            EnhancedSettingsScreen(
+                brokerUrl = droneViewModel.brokerUrl.value,
+                username = droneViewModel.username.value,
+                password = droneViewModel.password.value,
+                onSave = { newBroker, newUser, newPass ->
+                    droneViewModel.updateConnectionSettings(newBroker, newUser, newPass)
+                    showSettings = false
+                },
+                onBack = { showSettings = false }
+            )
+        } else {
+            DroneControlScreen(
+                droneViewModel = droneViewModel,
+                onNavigateToSettings = { showSettings = true }
+            )
+        }
+    }
+}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DroneControlScreen(
+    droneViewModel: DroneViewModel,
+    onNavigateToSettings: () -> Unit
+) {
+    val isConnecting by droneViewModel.isConnecting
+    val errorMessage by droneViewModel.errorMessage
+    val dronePosition by droneViewModel.dronePosition
+    
+    if (isConnecting) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator()
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = droneViewModel.connectionStatus.value,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+    } else {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Drone Control") },
+                    colors = TopAppBarDefaults.largeTopAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ),
+                    actions = {
+                        IconButton(onClick = onNavigateToSettings) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings"
+                            )
+                        }
+                    }
+                )
+            }
+        ) { paddingValues ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(8.dp)
+            ) {
+                // Display error message if connection fails
+                errorMessage?.let { message ->
+                    Text(
+                        text = message,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+                
+                // Map Section
+                Box(modifier = Modifier.weight(0.7f)) {
+                    EnhancedMapView(
+                        dronePosition = dronePosition,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Controls Section
+                EnhancedControlsSection(
+                    viewModel = droneViewModel,
+                    modifier = Modifier.weight(0.15f)
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Telemetry Section
+                EnhancedTelemetrySection(
+                    battery = droneViewModel.battery.intValue,
+                    altitude = droneViewModel.altitude.doubleValue,
+                    speed = droneViewModel.speed.doubleValue,
+                    modifier = Modifier.weight(0.15f)
+                )
+                
+                // Connection status
+                ConnectionStatusBar(
+                    status = droneViewModel.connectionStatus.value,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ConnectionStatusBar(status: String, modifier: Modifier = Modifier) {
+    val statusColor = when {
+        status.startsWith("Connected") -> MaterialTheme.colorScheme.primary
+        status.startsWith("Connection failed") || status.startsWith("Exception") -> 
+            MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = statusColor.copy(alpha = 0.1f),
+        shape = MaterialTheme.shapes.small
+    ) {
+        Row(
+            modifier = Modifier.padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = when {
+                    status.startsWith("Connected") -> Icons.Default.CheckCircle
+                    status.startsWith("Connection failed") || status.startsWith("Exception") ->
+                        Icons.Default.Error
+                    else -> Icons.Default.Info
+                },
+                contentDescription = null,
+                tint = statusColor
+            )
+            
+            Spacer(modifier = Modifier.width(8.dp))
+            
+            Text(
+                text = status,
+                color = statusColor,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EnhancedSettingsScreen(
+    brokerUrl: String,
+    username: String,
+    password: String,
+    onSave: (String, String, String) -> Unit,
+    onBack: () -> Unit
+) {
+    var broker by remember { mutableStateOf(brokerUrl) }
+    var user by remember { mutableStateOf(username) }
+    var pass by remember { mutableStateOf(password) }
+    
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Connection Settings") },
+                colors = TopAppBarDefaults.mediumTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ),
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .padding(paddingValues)
+                .padding(16.dp)
+                .fillMaxSize()
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "MQTT CONNECTION",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    
+                    OutlinedTextField(
+                        value = broker,
+                        onValueChange = { broker = it },
+                        label = { Text("Broker URL") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        leadingIcon = {
+                            Icon(Icons.Default.Cloud, contentDescription = null)
+                        }
+                    )
+                    
+                    OutlinedTextField(
+                        value = user,
+                        onValueChange = { user = it },
+                        label = { Text("Username") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        leadingIcon = {
+                            Icon(Icons.Default.Person, contentDescription = null)
+                        }
+                    )
+                    
+                    OutlinedTextField(
+                        value = pass,
+                        onValueChange = { pass = it },
+                        label = { Text("Password") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        leadingIcon = {
+                            Icon(Icons.Default.Lock, contentDescription = null)
+                        }
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.weight(1f))
+            
+            Button(
+                onClick = { 
+                    AppLogger.info("Settings saved - Broker URL: $broker")
+                    onSave(broker, user, pass) 
+                },
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .padding(top = 16.dp)
+            ) {
+                Icon(Icons.Default.Save, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("SAVE SETTINGS")
             }
         }
     }
@@ -93,202 +375,6 @@ fun SplashScreen(onLoadingComplete: () -> Unit) {
                 .size(100.dp)
                 .scale(scale.value)
         )
-    }
-}
-
-@Composable
-fun MainActivityUI() {
-    var showSettings by remember { mutableStateOf(false) }
-    var brokerUrl by remember { mutableStateOf("ssl://72fd58bd8ad34bd088141357462a53e5.s1.eu.hivemq.cloud:8883") }
-    var username by remember { mutableStateOf("drone-app") }
-    var password by remember { mutableStateOf("secure-Password012920") }
-
-    // Add logging for screen transitions
-    LaunchedEffect(showSettings) {
-        AppLogger.debug("Screen changed: ${if (showSettings) "Settings" else "Main"}")
-    }
-
-    Crossfade(
-        targetState = showSettings,
-        label = "ScreenTransition"
-    ) { isSettingsVisible ->
-        if (isSettingsVisible) {
-            SettingsScreen(
-                brokerUrl = brokerUrl,
-                username = username,
-                password = password,
-                onSave = { newBroker, newUser, newPass ->
-                    brokerUrl = newBroker
-                    username = newUser
-                    password = newPass
-                    showSettings = false
-                }
-            )
-        } else {
-            DroneControlAppUI(
-                brokerUrl = brokerUrl, 
-                username = username, 
-                password = password,
-                onNavigateToSettings = { showSettings = true }
-            )
-        }
-    }
-}
-
-@Composable
-fun DroneControlAppUI(
-    brokerUrl: String, 
-    username: String, 
-    password: String,
-    onNavigateToSettings: () -> Unit
-) {
-    val context = LocalContext.current
-    val mqttHandler = remember { MqttHandler(context) }
-    var dronePosition by remember { mutableStateOf(GeoPoint(-1.286389, 36.817223)) }
-    var battery by remember { mutableIntStateOf(100) }
-    var altitude by remember { mutableDoubleStateOf(0.0) }
-    var speed by remember { mutableDoubleStateOf(0.0) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var isConnecting by remember { mutableStateOf(true) }
-    var connectionStatus by remember { mutableStateOf("Initializing...") }
-
-    LaunchedEffect(Unit) {
-        AppLogger.info("Attempting MQTT connection to: $brokerUrl")
-        connectionStatus = "Connecting to $brokerUrl..."
-        
-        try {
-            mqttHandler.connect(
-                brokerUrl = brokerUrl,
-                clientId = "android-client-${System.currentTimeMillis()}",
-                username = username,
-                password = password,
-                onSuccess = { 
-                    connectionStatus = "Connected successfully to MQTT broker!"
-                    AppLogger.info("MQTT connection success callback triggered")
-                },
-                onError = { error -> 
-                    errorMessage = error
-                    connectionStatus = "Connection failed: $error"
-                    AppLogger.error("MQTT connection error: $error") 
-                }
-            )
-        } catch (e: Exception) {
-            connectionStatus = "Exception during connection: ${e.message}"
-            AppLogger.error("Exception during MQTT connection", e)
-        }
-        
-        isConnecting = false
-        AppLogger.debug("MQTT connection attempt completed")
-
-        if (errorMessage == null) {
-            AppLogger.info("MQTT connection successful, subscribing to topics")
-            mqttHandler.subscribe("drone/position") { payload ->
-                AppLogger.debug("Received position update: $payload")
-                try {
-                    // Parse JSON position data
-                    val jsonObject = org.json.JSONObject(payload)
-                    val latitude = jsonObject.getDouble("latitude")
-                    val longitude = jsonObject.getDouble("longitude")
-                    dronePosition = GeoPoint(latitude, longitude)
-                } catch (e: Exception) {
-                    AppLogger.error("Error parsing position data: ${e.message}")
-                }
-            }
-            mqttHandler.subscribe("drone/battery") { payload ->
-                AppLogger.debug("Received battery update: $payload")
-                try {
-                    battery = payload.toInt()
-                } catch (e: Exception) {
-                    AppLogger.error("Error parsing battery data: ${e.message}")
-                }
-            }
-            mqttHandler.subscribe("drone/altitude") { payload ->
-                AppLogger.debug("Received altitude update: $payload")
-                try {
-                    altitude = payload.toDouble()
-                } catch (e: Exception) {
-                    AppLogger.error("Error parsing altitude data: ${e.message}")
-                }
-            }
-            mqttHandler.subscribe("drone/speed") { payload ->
-                AppLogger.debug("Received speed update: $payload")
-                try {
-                    speed = payload.toDouble()
-                } catch (e: Exception) {
-                    AppLogger.error("Error parsing speed data: ${e.message}")
-                }
-            }
-        }
-    }
-
-    // Show loading indicator
-    if (isConnecting) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
-    } else {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(8.dp)
-        ) {
-            // Add app bar with settings button
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Drone Control",
-                    style = MaterialTheme.typography.titleLarge
-                )
-                
-                IconButton(onClick = onNavigateToSettings) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Settings"
-                    )
-                }
-            }
-
-            // Display error message if connection fails
-            errorMessage?.let { message ->
-                Text(
-                    text = message,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(8.dp)
-                )
-            }
-
-            // Map Section
-            Box(modifier = Modifier.weight(0.85f)) {
-                OSMMapView(dronePosition, modifier = Modifier.fillMaxSize())
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // Controls Section
-            ControlsSection(mqttHandler, modifier = Modifier.weight(0.07f))
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // Telemetry Section
-            TelemetrySection(battery, altitude, speed, modifier = Modifier.weight(0.08f))
-
-            // Connection status
-            Text(
-                text = connectionStatus,
-                color = if (connectionStatus.startsWith("Connected")) 
-                    MaterialTheme.colorScheme.primary 
-                else if (connectionStatus.startsWith("Connection failed") || connectionStatus.startsWith("Exception")) 
-                    MaterialTheme.colorScheme.error
-                else 
-                    MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(8.dp)
-            )
-        }
     }
 }
 
@@ -551,56 +637,12 @@ private fun TelemetryItem(
     }
 }
 
-@Composable
-fun SettingsScreen(
-    brokerUrl: String,
-    username: String,
-    password: String,
-    onSave: (String, String, String) -> Unit
-) {
-    var broker by remember { mutableStateOf(brokerUrl) }
-    var user by remember { mutableStateOf(username) }
-    var pass by remember { mutableStateOf(password) }
-
-    Column(modifier = Modifier.padding(16.dp)) {
-        OutlinedTextField(
-            value = broker,
-            onValueChange = { broker = it },
-            label = { Text("Broker URL") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(
-            value = user,
-            onValueChange = { user = it },
-            label = { Text("Username") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(
-            value = pass,
-            onValueChange = { pass = it },
-            label = { Text("Password") },
-            modifier = Modifier.fillMaxWidth()
-        )
-        Button(
-            onClick = { 
-                AppLogger.info("Settings saved - Broker URL: $broker")
-                onSave(broker, user, pass) 
-            },
-            modifier = Modifier.align(Alignment.End)
-        ) {
-            Text("Save")
-        }
-    }
-}
-
 @Preview(showBackground = true)
 @Composable
 fun DefaultPreview() {
     DroneControlAppTheme {
-        DroneControlAppUI(
-            brokerUrl = "ssl://72fd58bd8ad34bd088141357462a53e5.s1.eu.hivemq.cloud:8883", 
-            username = "drone-app", 
-            password = "secure-Password012920",
+        DroneControlScreen(
+            droneViewModel = DroneViewModel(LocalContext.current),
             onNavigateToSettings = {}  // Add empty function for preview
         )
     }

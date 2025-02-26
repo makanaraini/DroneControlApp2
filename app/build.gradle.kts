@@ -38,7 +38,6 @@ android {
         compose = true
     }
 }
-
 dependencies {
     implementation(libs.play.services.maps) // Google Maps SDK
     implementation(libs.material) // Material Design
@@ -54,6 +53,9 @@ dependencies {
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.org.eclipse.paho.client.mqttv3)
     implementation(libs.org.eclipse.paho.android.service)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.ui.tooling.preview)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
