@@ -10,56 +10,66 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 
-// Modern color palette
-private val md_theme_light_primary = Color(0xFF0B57D0)        // Deep Blue
+// Google Maps Light Mode Color Palette
+private val md_theme_light_primary = Color(0xFF4285F4)        // Google Blue
 private val md_theme_light_onPrimary = Color(0xFFFFFFFF)      // White
-private val md_theme_light_secondary = Color(0xFF2AC9DB)      // Bright Cyan
-private val md_theme_light_onSecondary = Color(0xFF000000)    // Black
-private val md_theme_light_error = Color(0xFFBA1A1A)          // Error Red
-private val md_theme_light_background = Color(0xFFFBFCFE)     // Off White
-private val md_theme_light_surface = Color(0xFFFFFFFF)        // White
-private val md_theme_light_tertiaryContainer = Color(0xFFE8F0FE) // Light Blue Container
+private val md_theme_light_secondary = Color(0xFF34A853)      // Google Green
+private val md_theme_light_onSecondary = Color(0xFFFFFFFF)    // White
+private val md_theme_light_error = Color(0xFFEA4335)          // Google Red
+private val md_theme_light_background = Color(0xFFF8F9FA)     // Google Light Gray
+private val md_theme_light_surface = Color(0xFFE8EAED)        // Google Slightly Darker Gray
+private val md_theme_light_tertiaryContainer = Color(0xFFFBBC05) // Google Yellow
 
 private val LightColorScheme = lightColorScheme(
     primary = md_theme_light_primary,
     onPrimary = md_theme_light_onPrimary,
+    primaryContainer = md_theme_light_primary,
+    onPrimaryContainer = md_theme_light_onPrimary,
     secondary = md_theme_light_secondary,
     onSecondary = md_theme_light_onSecondary,
-    error = md_theme_light_error,
+    secondaryContainer = md_theme_light_secondary,
+    onSecondaryContainer = md_theme_light_onPrimary,
     background = md_theme_light_background,
     surface = md_theme_light_surface,
-    tertiaryContainer = md_theme_light_tertiaryContainer,
-    onTertiaryContainer = md_theme_light_primary
+    error = md_theme_light_error,
+    onError = md_theme_light_onPrimary
 )
 
-// Modern color palette - Dark Theme
-private val md_theme_dark_primary = Color(0xFF90B4FF)        // Light Blue
-private val md_theme_dark_onPrimary = Color(0xFF00297A)      // Dark Blue
-private val md_theme_dark_secondary = Color(0xFF86E6EF)      // Light Cyan
-private val md_theme_dark_onSecondary = Color(0xFF000000)    // Black
-private val md_theme_dark_error = Color(0xFFFFB4AB)          // Light Red
-private val md_theme_dark_background = Color(0xFF1A1C1E)     // Dark Background
-private val md_theme_dark_surface = Color(0xFF121416)        // Even Darker Surface
-private val md_theme_dark_tertiaryContainer = Color(0xFF203654) // Dark Blue Container
-private val md_theme_dark_onTertiaryContainer = Color(0xFFD1E4FF) // Light Blue Text
+// Dark Theme - Instagram Dark Mode
+private val md_theme_dark_primary = Color(0xFF607D8B)       // Darker Instagram Purple
+private val md_theme_dark_onPrimary = Color(0xFF833AB4)      // Instagram Purple
+private val md_theme_dark_secondary = Color(0xFFE1306C)      // Instagram Pink
+private val md_theme_dark_onSecondary = Color(0xFFFFFFFF)    // White
+private val md_theme_dark_error = Color(0xFFFF5733)          // Warning Red-Orange
+private val md_theme_dark_background = Color(0xFF262626)     // Dark Gray (Instagram Dark)
+private val md_theme_dark_surface = Color(0xFF121212)        // Even Darker Gray
+private val md_theme_dark_tertiaryContainer = Color(0xFFFCAF45) // Instagram Yellow
+private val md_theme_dark_onTertiaryContainer = Color(0xFFE6E6E6) // Light Gray Text
 
 private val DarkColorScheme = darkColorScheme(
     primary = md_theme_dark_primary,
     onPrimary = md_theme_dark_onPrimary,
+    primaryContainer = md_theme_dark_primary,
+    onPrimaryContainer = md_theme_dark_onPrimary,
     secondary = md_theme_dark_secondary,
     onSecondary = md_theme_dark_onSecondary,
-    error = md_theme_dark_error,
+    secondaryContainer = md_theme_dark_secondary,
+    onSecondaryContainer = md_theme_dark_onPrimary,
     background = md_theme_dark_background,
     surface = md_theme_dark_surface,
-    tertiaryContainer = md_theme_dark_tertiaryContainer,
-    onTertiaryContainer = md_theme_dark_onTertiaryContainer
+    error = md_theme_dark_error,
+    onError = md_theme_dark_onPrimary
 )
 
 // Modern Typography
@@ -141,9 +151,17 @@ fun DroneControlAppTheme(
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
+    }
+
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as Activity).window
+            window.statusBarColor = colorScheme.primary.toArgb()
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = false
+        }
     }
 
     MaterialTheme(

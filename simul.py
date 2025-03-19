@@ -15,20 +15,57 @@ password = os.getenv("MQTT_PASSWORD", "secure-Password012920")
 # Topic base for drone data
 topic_base = "drone"
 
-# Simulate drone data with real-time values
+# Starting values for simulation
+base_lat, base_lng = -1.280010066301841, 36.81598408904595  # Example: JKML coordinates
+current_lat, current_lng = base_lat, base_lng
+current_battery = 100  # Start with full battery
+current_speed = 0.0
+target_speed = 15.0  # Target speed in m/s
+current_altitude = 100.0
+target_altitude = 500.0  # Target altitude in meters
+simulation_start_time = time.time()
+total_simulation_time = 3600  # 1 hour total flight time
+
+# Simulate drone data with realistic values
 def generate_drone_data():
-    # Generate random latitude and longitude near a base position
-    base_lat, base_lng = 48.8566, 2.3522  # Example: Paris coordinates
-    lat = base_lat + random.uniform(-0.01, 0.01)
-    lng = base_lng + random.uniform(-0.01, 0.01)
+    global current_lat, current_lng, current_battery, current_speed, current_altitude
+    global target_speed, target_altitude
+    
+    # Gradually increment position by 0.001 degrees
+    current_lat += 0.0001
+    current_lng += 0.0001
+    
+    # Calculate elapsed time for battery depletion (0-100% over total simulation time)
+    elapsed_time = time.time() - simulation_start_time
+    battery_drain_percentage = min(100, 100 - (elapsed_time / total_simulation_time * 100))
+    current_battery = max(0, int(battery_drain_percentage))
+    
+    # Gradually adjust speed (accelerate/decelerate smoothly)
+    speed_increment = 0.5  # m/s per update
+    if current_speed < target_speed:
+        current_speed = min(target_speed, current_speed + speed_increment)
+    elif current_speed > target_speed:
+        current_speed = max(target_speed, current_speed - speed_increment)
+    
+    # Gradually adjust altitude
+    altitude_increment = 5.0  # meters per update
+    if current_altitude < target_altitude:
+        current_altitude = min(target_altitude, current_altitude + altitude_increment)
+    elif current_altitude > target_altitude:
+        current_altitude = max(target_altitude, current_altitude - altitude_increment)
+    
+    # Every 30 seconds, change target speed and altitude to simulate flight maneuvers
+    if int(elapsed_time) % 30 == 0 and int(elapsed_time) > 0:
+        target_speed = random.uniform(5.0, 25.0)
+        target_altitude = random.uniform(100.0, 1000.0)
     
     data = {
         "drone_id": "drone123",
-        "battery": random.randint(0, 100),
-        "speed": round(random.uniform(0.0, 50.0), 2),
-        "altitude": round(random.uniform(100.0, 1000.0), 2),
-        "latitude": round(lat, 6),
-        "longitude": round(lng, 6),
+        "battery": current_battery,
+        "speed": round(current_speed, 2),
+        "altitude": round(current_altitude, 2),
+        "latitude": round(current_lat, 6),
+        "longitude": round(current_lng, 6),
         "timestamp": time.time()
     }
     return data
@@ -82,8 +119,8 @@ try:
         
         print(f"Published data: {drone_data}")
         
-        # Wait for 200ms before sending the next data point
-        time.sleep(0.2)
+        # Wait for 3s before sending the next data point
+        time.sleep(3)
 except KeyboardInterrupt:
     print("Simulation stopped by user")
 except Exception as e:

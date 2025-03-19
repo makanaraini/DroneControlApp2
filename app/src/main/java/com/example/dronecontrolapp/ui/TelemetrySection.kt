@@ -1,25 +1,33 @@
 package com.example.dronecontrolapp.ui
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.KeyboardDoubleArrowUp
 import androidx.compose.material.icons.outlined.Terrain
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.dronecontrolapp.AppLogger
+import com.example.dronecontrolapp.ui.theme.ElectricCyan
+import com.example.dronecontrolapp.ui.theme.AerospaceBlue
+import com.example.dronecontrolapp.ui.theme.Black
+import kotlinx.coroutines.delay
 
 @Composable
 fun EnhancedTelemetrySection(
@@ -28,184 +36,109 @@ fun EnhancedTelemetrySection(
     speed: Double,
     modifier: Modifier = Modifier
 ) {
-    LaunchedEffect(battery, altitude, speed) {
-        AppLogger.debug("""
-            Telemetry values received:
-            - Battery: $battery%
-            - Altitude: $altitude m
-            - Speed: $speed m/s
-        """.trimIndent())
+    // Debug logging to verify values are received
+    LaunchedEffect(key1 = battery, key2 = altitude, key3 = speed) {
+        AppLogger.debug("TelemetrySection values - Battery: $battery%, Altitude: ${altitude}m, Speed: ${speed}m/s")
     }
 
     val animatedBattery by animateFloatAsState(
         targetValue = battery.toFloat(),
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
+        animationSpec = tween(durationMillis = 1000),
         label = "BatteryAnimation"
     )
-    
+
     val animatedAltitude by animateFloatAsState(
         targetValue = altitude.toFloat(),
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
+        animationSpec = tween(durationMillis = 1000),
         label = "AltitudeAnimation"
     )
-    
+
     val animatedSpeed by animateFloatAsState(
         targetValue = speed.toFloat(),
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
+        animationSpec = tween(durationMillis = 1000),
         label = "SpeedAnimation"
     )
 
-    SideEffect {
-        AppLogger.debug("""
-            Animated values:
-            - Battery: ${animatedBattery.toInt()}%
-            - Altitude: ${animatedAltitude.toInt()} m
-            - Speed: ${animatedSpeed.toInt()} m/s
-        """.trimIndent())
+    val batteryColor = when {
+        battery > 80 -> Color(0xFF4CAF50) // Green
+        battery > 50 -> Color(0xFF8BC34A) // Light Green
+        battery > 20 -> Color(0xFFFFA000) // Amber
+        else -> Color(0xFFF44336) // Red for low battery
     }
 
-    // Determine battery icon and color dynamically
-    val (batteryIcon, batteryColor) = when {
-        battery > 80 -> Icons.Default.BatteryFull to Color(0xFF4CAF50)
-        battery > 50 -> Icons.Default.BatteryChargingFull to Color(0xFF8BC34A)
-        battery > 20 -> Icons.Default.BatteryStd to Color(0xFFFFC107)
-        else -> Icons.Default.BatteryAlert to Color(0xFFF44336)
+    var isLowBatteryBlinking by remember { mutableStateOf(false) }
+    LaunchedEffect(battery) {
+        while (battery < 20) {
+            isLowBatteryBlinking = !isLowBatteryBlinking
+            delay(500)
+        }
     }
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(8.dp)
+    // No box container - just the row of telemetry items
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceAround,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surface),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            ),
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = 4.dp
+        TelemetryItem(
+            icon = Icons.Outlined.KeyboardDoubleArrowUp,
+            label = "Alt",
+            value = "${altitude.toInt()} m",
+            color = Color.Black
+        )
+        CircularSpeedIndicator(speed = speed.toFloat())
+        BatteryStatusIndicator(
+            battery = battery,
+            color = batteryColor,
+            isBlinking = isLowBatteryBlinking
+        )
+    }
+}
+
+@Composable
+fun TelemetryItem(icon: ImageVector, label: String, value: String, color: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(icon, contentDescription = label, tint = color, modifier = Modifier.size(32.dp))
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(text = label, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color.Black)
+        Text(text = value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+    }
+}
+
+@Composable
+fun CircularSpeedIndicator(speed: Float) {
+    Box(contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(
+            progress = { speed / 50f }, // Normalize to expected range
+            color = Color(0xDEDEDEDE),  // Light blue accent
+            strokeWidth = 4.dp,
+            modifier = Modifier.size(48.dp)
+        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "${speed.toInt()}",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
             )
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp)
-            ) {
-                // Card Title
-                Text(
-                    text = "TELEMETRY DATA",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    // Altitude
-                    TelemetryItemEnhanced(
-                        icon = Icons.Outlined.Terrain,
-                        label = "ALTITUDE",
-                        value = "${animatedAltitude.toInt()}",
-                        unit = "m",
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.weight(1f)
-                    )
-                    
-                    // Speed
-                    TelemetryItemEnhanced(
-                        icon = Icons.Default.Speed,
-                        label = "SPEED",
-                        value = "${animatedSpeed.toInt()}",
-                        unit = "m/s",
-                        color = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.weight(1f)
-                    )
-                    
-                    // Battery
-                    TelemetryItemEnhanced(
-                        icon = batteryIcon,
-                        label = "BATTERY",
-                        value = "${animatedBattery.toInt()}",
-                        unit = "%",
-                        color = batteryColor,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
+            Text(
+                text = "m/s",
+                fontSize = 10.sp,
+                color = Color.Black
+            )
         }
     }
 }
 
 @Composable
-private fun TelemetryItemEnhanced(
-    icon: ImageVector,
-    label: String,
-    value: String,
-    unit: String,
-    color: Color,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-        modifier = modifier.padding(8.dp)
+fun BatteryStatusIndicator(battery: Int, color: Color, isBlinking: Boolean) {
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(if (isBlinking) Color.Red else color.copy(alpha = 0.3f)),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .size(50.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(color.copy(alpha = 0.1f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = label,
-                modifier = Modifier.size(24.dp),
-                tint = color
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Text(
-            text = label,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-        )
-        
-        Row(
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = value,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            
-            Text(
-                text = unit,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Normal,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                modifier = Modifier.padding(start = 2.dp, bottom = 2.dp)
-            )
-        }
+        Text(text = "$battery%", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Black) // Navy Blue
     }
-} 
+}

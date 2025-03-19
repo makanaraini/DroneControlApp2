@@ -43,6 +43,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.dronecontrolapp.ui.*
 import com.example.dronecontrolapp.viewmodel.DroneViewModel
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.example.dronecontrolapp.ui.theme.AerospaceBlue
+import com.example.dronecontrolapp.ui.theme.ElectricCyan
+import com.example.dronecontrolapp.ui.theme.OffWhite
 
 
 class MainActivity : ComponentActivity() {
@@ -65,6 +70,11 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    private fun sendCommandToDrone(command: String) {
+        val phoneNumber = "+1234567890" // Replace with the drone's phone number
+        SmsSender.sendCommand(phoneNumber, command)
+    }
 }
 
 @Composable
@@ -75,9 +85,11 @@ fun MainApp() {
     
     var showSettings by remember { mutableStateOf(false) }
     
-    // Initialize connection on first launch
-    LaunchedEffect(Unit) {
-        droneViewModel.connect()
+    // Initialize connection on first launch if not already connected
+    LaunchedEffect(droneViewModel.isConnecting.value) {
+        if (!droneViewModel.isConnecting.value && droneViewModel.connectionStatus.value != "Connected") {
+            droneViewModel.connect()
+        }
     }
     
     Crossfade(
@@ -109,88 +121,108 @@ fun DroneControlScreen(
     droneViewModel: DroneViewModel,
     onNavigateToSettings: () -> Unit
 ) {
+    var showLogViewer by remember { mutableStateOf(false) }
     val isConnecting by droneViewModel.isConnecting
     val errorMessage by droneViewModel.errorMessage
     val dronePosition by droneViewModel.dronePosition
     
-    if (isConnecting) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator()
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = droneViewModel.connectionStatus.value,
-                    style = MaterialTheme.typography.bodyMedium
+    // State for dropdown menu
+    var expanded by remember { mutableStateOf(false) }
+    
+    // Full screen map with overlaid components
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Map as the background layer
+        EnhancedMapView(
+            dronePosition = dronePosition,
+            modifier = Modifier.fillMaxSize(),
+            keepCentered = true  // Ensure this is always true for continuous tracking
+        )
+        
+        // Additional telemetry data (detailed view)
+        EnhancedTelemetrySection(
+            battery = droneViewModel.battery.intValue,
+            altitude = droneViewModel.altitude.doubleValue,
+            speed = droneViewModel.speed.doubleValue,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        )
+        
+        // Bottom controls area
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            EnhancedControlsSection(
+                viewModel = droneViewModel,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        
+        // Accessibility icon for logs and settings at the bottom
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+        ) {
+            IconButton(onClick = { expanded = true }) {
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "More Options",
+                    tint = ElectricCyan // Change the color to Electric Cyan
+                )
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                DropdownMenuItem(
+                    onClick = {
+                        showLogViewer = true
+                        expanded = false
+                    },
+                    text = { Text("View Logs") }
+                )
+                DropdownMenuItem(
+                    onClick = {
+                        onNavigateToSettings()
+                        expanded = false
+                    },
+                    text = { Text("Settings") }
                 )
             }
         }
-    } else {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Drone Control") },
-                    colors = TopAppBarDefaults.largeTopAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    ),
-                    actions = {
-                        IconButton(onClick = onNavigateToSettings) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Settings"
-                            )
-                        }
-                    }
-                )
-            }
-        ) { paddingValues ->
-            Column(
+        
+        // Display error message if present
+        errorMessage?.let { message ->
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.error,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
+                    .align(Alignment.TopCenter)
+                    .padding(top = 64.dp)
+                    .background(
+                        Color.White.copy(alpha = 0.8f),
+                        RoundedCornerShape(8.dp)
+                    )
                     .padding(8.dp)
-            ) {
-                // Display error message if connection fails
-                errorMessage?.let { message ->
-                    Text(
-                        text = message,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(8.dp)
-                    )
-                }
-                
-                // Map Section
-                Box(modifier = Modifier.weight(0.7f)) {
-                    EnhancedMapView(
-                        dronePosition = dronePosition,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // Controls Section
-                EnhancedControlsSection(
-                    viewModel = droneViewModel,
-                    modifier = Modifier.weight(0.15f)
-                )
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // Telemetry Section
-                EnhancedTelemetrySection(
-                    battery = droneViewModel.battery.intValue,
-                    altitude = droneViewModel.altitude.doubleValue,
-                    speed = droneViewModel.speed.doubleValue,
-                    modifier = Modifier.weight(0.15f)
-                )
-                
-                // Connection status
-                ConnectionStatusBar(
-                    status = droneViewModel.connectionStatus.value,
-                    modifier = Modifier.padding(vertical = 4.dp)
-                )
-            }
+            )
+        }
+        
+        // Notifications overlay
+        NotificationOverlay(
+            logs = LogManager.activeNotifications,
+            onDismiss = { LogManager.dismissNotification(it) },
+            modifier = Modifier.align(Alignment.TopEnd)
+        )
+
+        // Log viewer dialog
+        if (showLogViewer) {
+            LogViewerDialog(
+                onDismiss = { showLogViewer = false }
+            )
         }
     }
 }
@@ -198,10 +230,10 @@ fun DroneControlScreen(
 @Composable
 fun ConnectionStatusBar(status: String, modifier: Modifier = Modifier) {
     val statusColor = when {
-        status.startsWith("Connected") -> MaterialTheme.colorScheme.primary
+        status.startsWith("Connected") -> Color.Green // Green for connected
         status.startsWith("Connection failed") || status.startsWith("Exception") -> 
             MaterialTheme.colorScheme.error
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> Color(0xFFD81B60) // Darker pink for other states
     }
     
     Surface(
@@ -379,16 +411,33 @@ fun SplashScreen(onLoadingComplete: () -> Unit) {
 }
 
 @Composable
-fun OSMMapView(dronePosition: GeoPoint, modifier: Modifier = Modifier) {
+fun EnhancedMapView(
+    dronePosition: GeoPoint, 
+    modifier: Modifier = Modifier,
+    keepCentered: Boolean = true
+) {
     val context = LocalContext.current
     var mapController by remember { mutableStateOf<org.osmdroid.views.MapController?>(null) }
     var marker by remember { mutableStateOf<Marker?>(null) }
-    var animatedPosition by remember { mutableStateOf(dronePosition) } // Add this line
-
+    var mapView by remember { mutableStateOf<MapView?>(null) }
+    
+    // Enhanced position tracking with center-following behavior
     LaunchedEffect(dronePosition) {
-        // Animate the marker's position
-        AppLogger.debug("Drone position updated: ${dronePosition.latitude}, ${dronePosition.longitude}")
-        animatedPosition = dronePosition
+        AppLogger.debug("Drone position update: ${dronePosition.latitude}, ${dronePosition.longitude}")
+        
+        // Update marker position
+        marker?.apply {
+            position = dronePosition
+            
+            // Always center the map on the drone position
+            if (keepCentered) {
+                // Use animateTo for smooth transitions
+                mapController?.animateTo(dronePosition)
+            }
+            
+            // Force map redraw
+            mapView?.invalidate()
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -398,55 +447,64 @@ fun OSMMapView(dronePosition: GeoPoint, modifier: Modifier = Modifier) {
         )
     }
 
-    Box(modifier = modifier) {
-        AndroidView(
-            factory = { ctx ->
-                MapView(ctx).apply {
-                    setTileSource(TileSourceFactory.MAPNIK)
-                    setMultiTouchControls(true)
+    AndroidView(
+        factory = { ctx ->
+            MapView(ctx).apply {
+                setTileSource(TileSourceFactory.MAPNIK)
+                setMultiTouchControls(true)
+                mapView = this
 
-                    mapController = this.controller as org.osmdroid.views.MapController
-                    mapController?.setZoom(15.0)
-                    mapController?.setCenter(animatedPosition) // Use animatedPosition here
+                mapController = this.controller as org.osmdroid.views.MapController
+                mapController?.setZoom(15.0)
+                mapController?.setCenter(dronePosition)
 
-                    val originalIcon = ContextCompat.getDrawable(ctx, R.drawable.drone_icon)
+                val originalIcon = ContextCompat.getDrawable(ctx, R.drawable.drone_icon)
 
-                    val droneIcon = originalIcon?.let {
-                        val width = 50  // Set desired width (in pixels)
-                        val height = 50 // Set desired height (in pixels)
-                        val scaledBitmap = Bitmap.createScaledBitmap(
-                            (it as BitmapDrawable).bitmap, width, height, false
-                        )
-                        BitmapDrawable(ctx.resources, scaledBitmap)
-                    }
-
-                    marker = Marker(this).apply {
-                        position = animatedPosition // Use animatedPosition here
-                        icon = droneIcon
-                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                        title = "Drone Location"
-                    }
-                    this.overlays.add(marker)
-                    this.invalidate()
+                val droneIcon = originalIcon?.let {
+                    // Increased size for better visibility
+                    val width = 50  // Make it larger for better visibility
+                    val height = 50
+                    val scaledBitmap = Bitmap.createScaledBitmap(
+                        (it as BitmapDrawable).bitmap, width, height, false
+                    )
+                    BitmapDrawable(ctx.resources, scaledBitmap)
                 }
-            },
-            modifier = Modifier
-                .fillMaxSize()
-                .shadow(4.dp, shape = MaterialTheme.shapes.medium)
-                .clip(MaterialTheme.shapes.medium)
-        )
 
-        FloatingActionButton(
-            onClick = { 
-                AppLogger.debug("Map recentered to drone position")
-                mapController?.setCenter(animatedPosition) 
-            },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(8.dp)
-                .size(40.dp)
-        ) {
-            Icon(Icons.Default.MyLocation, contentDescription = "Recenter", modifier = Modifier.size(20.dp))
+                marker = Marker(this).apply {
+                    position = dronePosition
+                    icon = droneIcon
+                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                    title = "Drone Location"
+                    snippet = "Lat: ${dronePosition.latitude}\nLng: ${dronePosition.longitude}"
+                }
+                this.overlays.add(marker)
+                this.invalidate()
+            }
+        },
+        update = { view ->
+            // This ensures any updates to the map properly refresh
+            view.invalidate()
+        },
+        modifier = modifier
+    )
+
+    // Only show recenter button if auto-centering is disabled
+    if (!keepCentered) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            FloatingActionButton(
+                onClick = { mapController?.setCenter(dronePosition) },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
+                    .size(48.dp),
+                containerColor = Color(0xFFEC407A)
+            ) {
+                Icon(
+                    Icons.Default.MyLocation, 
+                    contentDescription = "Recenter",
+                    tint = Color.White
+                )
+            }
         }
     }
 }

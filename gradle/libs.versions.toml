@@ -22,6 +22,7 @@ retrofit = "2.9.0" # Replace with the actual version
 socket-io = "2.1.0" # Replace with the actual version
 ui = "1.7.8"
 uiToolingPreview = "1.7.8"
+runtime = "1.0.0-alpha02"
 
 [libraries]
 androidx-activity-compose-v180 = { module = "androidx.activity:activity-compose", version.ref = "activityComposeVersion" }
@@ -47,6 +48,7 @@ retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit
 socket-io = { module = "io.socket:socket.io-client", version.ref = "socket-io" }
 ui = { module = "androidx.compose.ui:ui", version.ref = "ui" }
 ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview", version.ref = "uiToolingPreview" }
+androidx-runtime = { group = "androidx.xr.runtime", name = "runtime", version.ref = "runtime" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

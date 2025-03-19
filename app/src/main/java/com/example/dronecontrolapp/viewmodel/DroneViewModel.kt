@@ -9,9 +9,13 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.dronecontrolapp.AppLogger
 import com.example.dronecontrolapp.MqttHandler
+import com.example.dronecontrolapp.LogManager
+import com.example.dronecontrolapp.LogType
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import org.osmdroid.util.GeoPoint
+import java.text.SimpleDateFormat
+import java.util.*
 
 class DroneViewModel(private val context: Context) : ViewModel() {
     private val mqttHandler = MqttHandler(context)
@@ -32,10 +36,19 @@ class DroneViewModel(private val context: Context) : ViewModel() {
     val username = mutableStateOf("drone-app")
     val password = mutableStateOf("secure-Password012920")
     
+    // Add a flag to track if we've shown the "drone is live" notification
+    private var droneDataReceived = false
+    
     fun connect() {
         isConnecting.value = true
         connectionStatus.value = "Connecting to ${brokerUrl.value}..."
         errorMessage.value = null
+        
+        // Reset drone data received flag
+        droneDataReceived = false
+        
+        // Log connection attempt as a notification
+        LogManager.addLog("Connecting to MQTT broker...", LogType.INFO)
         
         viewModelScope.launch {
             try {
@@ -45,19 +58,20 @@ class DroneViewModel(private val context: Context) : ViewModel() {
                     username = username.value,
                     password = password.value,
                     onSuccess = { 
-                        connectionStatus.value = "Connected successfully to MQTT broker!"
+                        connectionStatus.value = "Connected"
                         AppLogger.info("MQTT connection success callback triggered")
                         subscribeToTopics()
                     },
                     onError = { error -> 
-                        errorMessage.value = error
-                        connectionStatus.value = "Connection failed: $error"
+                        connectionStatus.value = "Connection failed"
+                        LogManager.addLog("Connection failed: $error", LogType.ERROR)
                         AppLogger.error("MQTT connection error: $error") 
                         isConnecting.value = false
                     }
                 )
             } catch (e: Exception) {
                 connectionStatus.value = "Exception during connection: ${e.message}"
+                LogManager.addLog("Connection error: ${e.message}", LogType.ERROR)
                 AppLogger.error("Exception during MQTT connection", e)
                 isConnecting.value = false
             }
@@ -67,6 +81,9 @@ class DroneViewModel(private val context: Context) : ViewModel() {
     private fun subscribeToTopics() {
         AppLogger.info("MQTT connection successful, subscribing to topics")
         
+        // Show initial connection success notification
+        LogManager.addLog("Connected to MQTT broker successfully", LogType.SUCCESS)
+        
         mqttHandler.subscribe("drone/position") { payload ->
             AppLogger.debug("Received position update: $payload")
             try {
@@ -74,6 +91,16 @@ class DroneViewModel(private val context: Context) : ViewModel() {
                 val latitude = jsonObject.getDouble("latitude")
                 val longitude = jsonObject.getDouble("longitude")
                 dronePosition.value = GeoPoint(latitude, longitude)
+                
+                // Log the data in debug logs but don't send a notification
+                val timestamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date())
+                AppLogger.info("GPS data received ($timestamp): Lat: $latitude, Lng: $longitude")
+                
+                // Show "Drone is live" notification only on first data received
+                if (!droneDataReceived) {
+                    droneDataReceived = true
+                    LogManager.addLog("Drone telemetry stream active! Drone is now transmitting data.", LogType.SUCCESS)
+                }
             } catch (e: Exception) {
                 AppLogger.error("Error parsing position data: ${e.message}")
             }
@@ -83,6 +110,10 @@ class DroneViewModel(private val context: Context) : ViewModel() {
             AppLogger.debug("Received battery update: $payload")
             try {
                 battery.intValue = payload.toInt()
+                
+                // Only log to debug, don't notify
+                val timestamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date())
+                AppLogger.info("Battery data received ($timestamp): ${battery.intValue}%")
             } catch (e: Exception) {
                 AppLogger.error("Error parsing battery data: ${e.message}")
             }
@@ -92,6 +123,10 @@ class DroneViewModel(private val context: Context) : ViewModel() {
             AppLogger.debug("Received altitude update: $payload")
             try {
                 altitude.doubleValue = payload.toDouble()
+                
+                // Only log to debug, don't notify
+                val timestamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date())
+                AppLogger.info("Altitude data received ($timestamp): ${altitude.doubleValue}m")
             } catch (e: Exception) {
                 AppLogger.error("Error parsing altitude data: ${e.message}")
             }
@@ -101,8 +136,22 @@ class DroneViewModel(private val context: Context) : ViewModel() {
             AppLogger.debug("Received speed update: $payload")
             try {
                 speed.doubleValue = payload.toDouble()
+                
+                // Only log to debug, don't notify
+                val timestamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date())
+                AppLogger.info("Speed data received ($timestamp): ${speed.doubleValue}m/s")
             } catch (e: Exception) {
                 AppLogger.error("Error parsing speed data: ${e.message}")
+            }
+        }
+        
+        mqttHandler.subscribe("drone/telemetry") { payload ->
+            AppLogger.debug("Received complete telemetry update: $payload")
+            try {
+                val jsonObject = JSONObject(payload)
+                // Process complete telemetry data if needed
+            } catch (e: Exception) {
+                AppLogger.error("Error parsing telemetry data: ${e.message}")
             }
         }
         
