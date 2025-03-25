@@ -60,7 +60,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     var showSplash by remember { mutableStateOf(true) }
-                    
+
                     if (showSplash) {
                         FuturisticSplashScreen(onLoadingComplete = { showSplash = false })
                     } else {
@@ -82,16 +82,16 @@ fun MainApp() {
     val droneViewModel: DroneViewModel = viewModel(
         factory = DroneViewModel.Factory(LocalContext.current)
     )
-    
+
     var showSettings by remember { mutableStateOf(false) }
-    
+
     // Initialize connection on first launch if not already connected
     LaunchedEffect(droneViewModel.isConnecting.value) {
         if (!droneViewModel.isConnecting.value && droneViewModel.connectionStatus.value != "Connected") {
             droneViewModel.connect()
         }
     }
-    
+
     Crossfade(
         targetState = showSettings,
         label = "ScreenTransition"
@@ -125,10 +125,10 @@ fun DroneControlScreen(
     val isConnecting by droneViewModel.isConnecting
     val errorMessage by droneViewModel.errorMessage
     val dronePosition by droneViewModel.dronePosition
-    
+
     // State for dropdown menu
     var expanded by remember { mutableStateOf(false) }
-    
+
     // Full screen map with overlaid components
     Box(modifier = Modifier.fillMaxSize()) {
         // Map as the background layer
@@ -137,7 +137,7 @@ fun DroneControlScreen(
             modifier = Modifier.fillMaxSize(),
             keepCentered = true  // Ensure this is always true for continuous tracking
         )
-        
+
         // Additional telemetry data (detailed view)
         EnhancedTelemetrySection(
             battery = droneViewModel.battery.intValue,
@@ -147,7 +147,7 @@ fun DroneControlScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
         )
-        
+
         // Bottom controls area
         Box(
             modifier = Modifier
@@ -160,7 +160,7 @@ fun DroneControlScreen(
                 modifier = Modifier.fillMaxWidth()
             )
         }
-        
+
         // Accessibility icon for logs and settings at the bottom
         Box(
             modifier = Modifier
@@ -194,7 +194,7 @@ fun DroneControlScreen(
                 )
             }
         }
-        
+
         // Display error message if present
         errorMessage?.let { message ->
             Text(
@@ -210,7 +210,7 @@ fun DroneControlScreen(
                     .padding(8.dp)
             )
         }
-        
+
         // Notifications overlay
         NotificationOverlay(
             logs = LogManager.activeNotifications,
@@ -231,11 +231,11 @@ fun DroneControlScreen(
 fun ConnectionStatusBar(status: String, modifier: Modifier = Modifier) {
     val statusColor = when {
         status.startsWith("Connected") -> Color.Green // Green for connected
-        status.startsWith("Connection failed") || status.startsWith("Exception") -> 
+        status.startsWith("Connection failed") || status.startsWith("Exception") ->
             MaterialTheme.colorScheme.error
         else -> Color(0xFFD81B60) // Darker pink for other states
     }
-    
+
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = statusColor.copy(alpha = 0.1f),
@@ -255,9 +255,9 @@ fun ConnectionStatusBar(status: String, modifier: Modifier = Modifier) {
                 contentDescription = null,
                 tint = statusColor
             )
-            
+
             Spacer(modifier = Modifier.width(8.dp))
-            
+
             Text(
                 text = status,
                 color = statusColor,
@@ -279,7 +279,7 @@ fun EnhancedSettingsScreen(
     var broker by remember { mutableStateOf(brokerUrl) }
     var user by remember { mutableStateOf(username) }
     var pass by remember { mutableStateOf(password) }
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -320,7 +320,7 @@ fun EnhancedSettingsScreen(
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
-                    
+
                     OutlinedTextField(
                         value = broker,
                         onValueChange = { broker = it },
@@ -332,7 +332,7 @@ fun EnhancedSettingsScreen(
                             Icon(Icons.Default.Cloud, contentDescription = null)
                         }
                     )
-                    
+
                     OutlinedTextField(
                         value = user,
                         onValueChange = { user = it },
@@ -344,7 +344,7 @@ fun EnhancedSettingsScreen(
                             Icon(Icons.Default.Person, contentDescription = null)
                         }
                     )
-                    
+
                     OutlinedTextField(
                         value = pass,
                         onValueChange = { pass = it },
@@ -358,13 +358,13 @@ fun EnhancedSettingsScreen(
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.weight(1f))
-            
+
             Button(
-                onClick = { 
+                onClick = {
                     AppLogger.info("Settings saved - Broker URL: $broker")
-                    onSave(broker, user, pass) 
+                    onSave(broker, user, pass)
                 },
                 modifier = Modifier
                     .align(Alignment.End)
@@ -412,7 +412,7 @@ fun SplashScreen(onLoadingComplete: () -> Unit) {
 
 @Composable
 fun EnhancedMapView(
-    dronePosition: GeoPoint, 
+    dronePosition: GeoPoint,
     modifier: Modifier = Modifier,
     keepCentered: Boolean = true
 ) {
@@ -420,21 +420,21 @@ fun EnhancedMapView(
     var mapController by remember { mutableStateOf<org.osmdroid.views.MapController?>(null) }
     var marker by remember { mutableStateOf<Marker?>(null) }
     var mapView by remember { mutableStateOf<MapView?>(null) }
-    
+
     // Enhanced position tracking with center-following behavior
     LaunchedEffect(dronePosition) {
         AppLogger.debug("Drone position update: ${dronePosition.latitude}, ${dronePosition.longitude}")
-        
+
         // Update marker position
         marker?.apply {
             position = dronePosition
-            
+
             // Always center the map on the drone position
             if (keepCentered) {
                 // Use animateTo for smooth transitions
                 mapController?.animateTo(dronePosition)
             }
-            
+
             // Force map redraw
             mapView?.invalidate()
         }
@@ -500,7 +500,7 @@ fun EnhancedMapView(
                 containerColor = Color(0xFFEC407A)
             ) {
                 Icon(
-                    Icons.Default.MyLocation, 
+                    Icons.Default.MyLocation,
                     contentDescription = "Recenter",
                     tint = Color.White
                 )
@@ -524,7 +524,7 @@ fun ControlsSection(mqttHandler: MqttHandler, modifier: Modifier = Modifier) {
     ) {
         // Takeoff Button
         Button(
-            onClick = { 
+            onClick = {
                 coroutineScope.launch {
                     takeoffScale.animateTo(0.9f, animationSpec = spring(stiffness = 300f))
                     takeoffScale.animateTo(1f, animationSpec = spring(stiffness = 300f))
