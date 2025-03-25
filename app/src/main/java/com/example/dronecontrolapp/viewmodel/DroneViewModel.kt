@@ -1,9 +1,11 @@
 package com.example.dronecontrolapp.viewmodel
 
+import android.app.Application
 import android.content.Context
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -17,8 +19,8 @@ import org.osmdroid.util.GeoPoint
 import java.text.SimpleDateFormat
 import java.util.*
 
-class DroneViewModel(private val context: Context) : ViewModel() {
-    private val mqttHandler = MqttHandler(context)
+class DroneViewModel(application: Application) : AndroidViewModel(application) {
+    private val mqttHandler = MqttHandler(application)
     
     // Connection state
     val isConnecting = mutableStateOf(true)
@@ -175,11 +177,37 @@ class DroneViewModel(private val context: Context) : ViewModel() {
         mqttHandler.disconnect()
     }
     
-    class Factory(private val context: Context) : ViewModelProvider.Factory {
+    fun updateTelemetryFromSms(telemetry: String) {
+        // Parse the telemetry string and update the LiveData properties
+        try {
+            val jsonObject = JSONObject(telemetry)
+            val latitude = jsonObject.getDouble("latitude")
+            val longitude = jsonObject.getDouble("longitude")
+            dronePosition.value = GeoPoint(latitude, longitude)
+            // Update other telemetry data similarly
+        } catch (e: Exception) {
+            AppLogger.error("Error parsing SMS telemetry data: ${e.message}")
+        }
+    }
+
+    fun updateTelemetryFromMqtt(telemetry: String) {
+        // Similar to SMS, parse the telemetry data and update LiveData
+        try {
+            val jsonObject = JSONObject(telemetry)
+            val latitude = jsonObject.getDouble("latitude")
+            val longitude = jsonObject.getDouble("longitude")
+            dronePosition.value = GeoPoint(latitude, longitude)
+            // Update other telemetry data similarly
+        } catch (e: Exception) {
+            AppLogger.error("Error parsing MQTT telemetry data: ${e.message}")
+        }
+    }
+    
+    class Factory(private val application: Application) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(DroneViewModel::class.java)) {
-                return DroneViewModel(context) as T
+                return DroneViewModel(application) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class")
         }

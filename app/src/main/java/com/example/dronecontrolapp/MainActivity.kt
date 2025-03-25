@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -48,9 +49,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import com.example.dronecontrolapp.ui.theme.AerospaceBlue
 import com.example.dronecontrolapp.ui.theme.ElectricCyan
 import com.example.dronecontrolapp.ui.theme.OffWhite
+import android.app.Application
 
 
 class MainActivity : ComponentActivity() {
+    private val droneViewModel: DroneViewModel by viewModels { DroneViewModel.Factory(application) }
+    private var useMqtt = true
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -64,23 +69,37 @@ class MainActivity : ComponentActivity() {
                     if (showSplash) {
                         FuturisticSplashScreen(onLoadingComplete = { showSplash = false })
                     } else {
-                        MainApp()
+                        MainApp(application)
                     }
                 }
+            }
+        }
+
+        // Check MQTT connection status and switch to SMS if needed
+        droneViewModel.connectionStatus.observe(this) { status ->
+            if (status != "Connected") {
+                useMqtt = false
+                AppLogger.info("Switching to SMS communication")
+            } else {
+                useMqtt = true
             }
         }
     }
 
     private fun sendCommandToDrone(command: String) {
-        val phoneNumber = "+1234567890" // Replace with the drone's phone number
-        SmsSender.sendCommand(phoneNumber, command)
+        if (useMqtt) {
+            droneViewModel.sendCommand(command)
+        } else {
+            val phoneNumber = "+1234567890" // Replace with the drone's phone number
+            SmsSender.sendCommand(phoneNumber, command)
+        }
     }
 }
 
 @Composable
-fun MainApp() {
+fun MainApp(application: Application) {
     val droneViewModel: DroneViewModel = viewModel(
-        factory = DroneViewModel.Factory(LocalContext.current)
+        factory = DroneViewModel.Factory(application)
     )
 
     var showSettings by remember { mutableStateOf(false) }
@@ -699,9 +718,23 @@ private fun TelemetryItem(
 @Composable
 fun DefaultPreview() {
     DroneControlAppTheme {
+        val context = LocalContext.current.applicationContext as Application
+        val droneViewModel = remember { DroneViewModel(context) }
+
         DroneControlScreen(
-            droneViewModel = DroneViewModel(LocalContext.current),
-            onNavigateToSettings = {}  // Add empty function for preview
+            droneViewModel = droneViewModel,
+            onNavigateToSettings = {}
         )
     }
+}
+
+@Composable
+fun DroneControlScreenWithViewModel(onNavigateToSettings: () -> Unit) {
+    val context = LocalContext.current.applicationContext as Application
+    val droneViewModel: DroneViewModel = viewModel(factory = DroneViewModel.Factory(context))
+
+    DroneControlScreen(
+        droneViewModel = droneViewModel,
+        onNavigateToSettings = onNavigateToSettings
+    )
 }
