@@ -37,6 +37,7 @@ import com.example.dronecontrolapp.SmsSender
 @Composable
 fun EnhancedControlsSection(
     viewModel: DroneViewModel,
+    useMqtt: Boolean,
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()

@@ -50,11 +50,18 @@ import com.example.dronecontrolapp.ui.theme.AerospaceBlue
 import com.example.dronecontrolapp.ui.theme.ElectricCyan
 import com.example.dronecontrolapp.ui.theme.OffWhite
 import android.app.Application
+import com.example.dronecontrolapp.MqttHandler
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Divider
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 
 
 class MainActivity : ComponentActivity() {
     private val droneViewModel: DroneViewModel by viewModels { DroneViewModel.Factory(application) }
-    private var useMqtt = true
+    private var useMqtt by mutableStateOf(true) // Define useMqtt as a mutable state at activity level
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,19 +76,14 @@ class MainActivity : ComponentActivity() {
                     if (showSplash) {
                         FuturisticSplashScreen(onLoadingComplete = { showSplash = false })
                     } else {
-                        MainApp(application)
+                        // Pass useMqtt state and its updater to MainApp
+                        MainApp(
+                            application = application,
+                            useMqtt = useMqtt,
+                            onUseMqttChange = { newValue -> useMqtt = newValue }
+                        )
                     }
                 }
-            }
-        }
-
-        // Check MQTT connection status and switch to SMS if needed
-        droneViewModel.connectionStatus.observe(this) { status ->
-            if (status != "Connected") {
-                useMqtt = false
-                AppLogger.info("Switching to SMS communication")
-            } else {
-                useMqtt = true
             }
         }
     }
@@ -97,17 +99,29 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainApp(application: Application) {
+fun MainApp(
+    application: Application,
+    useMqtt: Boolean,
+    onUseMqttChange: (Boolean) -> Unit
+) {
     val droneViewModel: DroneViewModel = viewModel(
         factory = DroneViewModel.Factory(application)
     )
 
     var showSettings by remember { mutableStateOf(false) }
 
-    // Initialize connection on first launch if not already connected
-    LaunchedEffect(droneViewModel.isConnecting.value) {
-        if (!droneViewModel.isConnecting.value && droneViewModel.connectionStatus.value != "Connected") {
-            droneViewModel.connect()
+    // Ensure the connection settings are being used
+    LaunchedEffect(Unit) {
+        droneViewModel.connect()  // This will use the credentials set in DroneViewModel
+    }
+
+    // Observe connection status and update useMqtt
+    LaunchedEffect(droneViewModel.connectionStatus.value) {
+        if (droneViewModel.connectionStatus.value != "Connected") {
+            onUseMqttChange(false)
+            AppLogger.info("Switching to SMS communication")
+        } else {
+            onUseMqttChange(true)
         }
     }
 
@@ -124,12 +138,14 @@ fun MainApp(application: Application) {
                     droneViewModel.updateConnectionSettings(newBroker, newUser, newPass)
                     showSettings = false
                 },
-                onBack = { showSettings = false }
+                onBack = { showSettings = false },
+                droneViewModel = droneViewModel
             )
         } else {
             DroneControlScreen(
                 droneViewModel = droneViewModel,
-                onNavigateToSettings = { showSettings = true }
+                onNavigateToSettings = { showSettings = true },
+                useMqtt = useMqtt
             )
         }
     }
@@ -138,9 +154,11 @@ fun MainApp(application: Application) {
 @Composable
 fun DroneControlScreen(
     droneViewModel: DroneViewModel,
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    useMqtt: Boolean
 ) {
     var showLogViewer by remember { mutableStateOf(false) }
+    var showDebugConsole by remember { mutableStateOf(false) }
     val isConnecting by droneViewModel.isConnecting
     val errorMessage by droneViewModel.errorMessage
     val dronePosition by droneViewModel.dronePosition
@@ -176,6 +194,7 @@ fun DroneControlScreen(
         ) {
             EnhancedControlsSection(
                 viewModel = droneViewModel,
+                useMqtt = useMqtt,
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -211,6 +230,13 @@ fun DroneControlScreen(
                     },
                     text = { Text("Settings") }
                 )
+                DropdownMenuItem(
+                    onClick = {
+                        showDebugConsole = true
+                        expanded = false
+                    },
+                    text = { Text("MQTT Debug Console") }
+                )
             }
         }
 
@@ -241,6 +267,38 @@ fun DroneControlScreen(
         if (showLogViewer) {
             LogViewerDialog(
                 onDismiss = { showLogViewer = false }
+            )
+        }
+
+        // Add connection status indicator
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(16.dp)
+                .background(
+                    color = when {
+                        isConnecting -> Color.Yellow.copy(alpha = 0.7f)
+                        droneViewModel.connectionStatus.value == "Connected" -> 
+                            Color.Green.copy(alpha = 0.7f)
+                        else -> Color.Red.copy(alpha = 0.7f)
+                    },
+                    shape = RoundedCornerShape(4.dp)
+                )
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Text(
+                text = if (isConnecting) "Connecting..." 
+                      else droneViewModel.connectionStatus.value,
+                color = Color.White,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+
+        // Add this after your other dialogs
+        if (showDebugConsole) {
+            MqttDebugConsole(
+                droneViewModel = droneViewModel,
+                onDismiss = { showDebugConsole = false }
             )
         }
     }
@@ -293,7 +351,8 @@ fun EnhancedSettingsScreen(
     username: String,
     password: String,
     onSave: (String, String, String) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    droneViewModel: DroneViewModel
 ) {
     var broker by remember { mutableStateOf(brokerUrl) }
     var user by remember { mutableStateOf(username) }
@@ -723,7 +782,8 @@ fun DefaultPreview() {
 
         DroneControlScreen(
             droneViewModel = droneViewModel,
-            onNavigateToSettings = {}
+            onNavigateToSettings = {},
+            useMqtt = true
         )
     }
 }
@@ -735,6 +795,65 @@ fun DroneControlScreenWithViewModel(onNavigateToSettings: () -> Unit) {
 
     DroneControlScreen(
         droneViewModel = droneViewModel,
-        onNavigateToSettings = onNavigateToSettings
+        onNavigateToSettings = onNavigateToSettings,
+        useMqtt = true
+    )
+}
+
+@Composable
+fun MqttDebugConsole(
+    droneViewModel: DroneViewModel,
+    onDismiss: () -> Unit
+) {
+    // Store a list of log messages
+    val logs = remember { mutableStateListOf<String>() }
+    
+    // Set up a subscription for diagnostic logs
+    LaunchedEffect(Unit) {
+        // Add initial diagnostic info
+        logs.add("🔎 MQTT Debug Console")
+        logs.add("Broker: ${droneViewModel.brokerUrl.value}")
+        logs.add("Connected: ${droneViewModel.isMqttConnected()}")
+        logs.add("Status: ${droneViewModel.connectionStatus.value}")
+        logs.add("Connection info: ${droneViewModel.getMqttConnectionInfo()}")
+        
+        // Test publishing/subscribing to verify broker functionality
+        logs.add("Testing MQTT communication...")
+        droneViewModel.testSubscriptions { message ->
+            logs.add(message)
+        }
+    }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("MQTT Debug Console") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(300.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                logs.forEach { log ->
+                    Text(log, style = MaterialTheme.typography.bodySmall)
+                    Divider(modifier = Modifier.padding(vertical = 2.dp))
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                logs.add("Manual test initiated...")
+                droneViewModel.testSubscriptions { message ->
+                    logs.add(message)
+                }
+            }) {
+                Text("Test Subscriptions")
+            }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
     )
 }

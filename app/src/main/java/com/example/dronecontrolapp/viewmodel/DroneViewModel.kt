@@ -2,6 +2,10 @@ package com.example.dronecontrolapp.viewmodel
 
 import android.app.Application
 import android.content.Context
+import android.os.Build
+import androidx.core.app.NotificationChannel
+import androidx.core.app.NotificationManager
+import androidx.core.app.NotificationCompat
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -34,130 +38,163 @@ class DroneViewModel(application: Application) : AndroidViewModel(application) {
     val speed = mutableDoubleStateOf(0.0)
     
     // Connection config
-    val brokerUrl = mutableStateOf("ssl://72fd58bd8ad34bd088141357462a53e5.s1.eu.hivemq.cloud:8883")
-    val username = mutableStateOf("drone-app")
-    val password = mutableStateOf("secure-Password012920")
+    val brokerUrl = mutableStateOf("ssl://72fd58bd8ad34bd088141357462a53e5.s1.eu.hivemq.cloud:8883")  // Use SSL for secure connection
+    val username = mutableStateOf("drone-app")  // Username
+    val password = mutableStateOf("secure-Password012920")  // Password
     
     // Add a flag to track if we've shown the "drone is live" notification
     private var droneDataReceived = false
+    private var isDroneLive = false  // Track if the drone is live
     
     fun connect() {
         isConnecting.value = true
-        connectionStatus.value = "Connecting to ${brokerUrl.value}..."
         errorMessage.value = null
         
-        // Reset drone data received flag
-        droneDataReceived = false
+        AppLogger.info("Attempting to connect to MQTT broker: ${brokerUrl.value}")
         
-        // Log connection attempt as a notification
-        LogManager.addLog("Connecting to MQTT broker...", LogType.INFO)
+        // Generate a random client ID for each connection attempt
+        val clientId = "DroneControlApp-${UUID.randomUUID().toString().substring(0, 8)}"
         
-        viewModelScope.launch {
-            try {
-                mqttHandler.connect(
-                    brokerUrl = brokerUrl.value,
-                    clientId = "android-client-${System.currentTimeMillis()}",
-                    username = username.value,
-                    password = password.value,
-                    onSuccess = { 
-                        connectionStatus.value = "Connected"
-                        AppLogger.info("MQTT connection success callback triggered")
-                        subscribeToTopics()
-                    },
-                    onError = { error -> 
-                        connectionStatus.value = "Connection failed"
-                        LogManager.addLog("Connection failed: $error", LogType.ERROR)
-                        AppLogger.error("MQTT connection error: $error") 
-                        isConnecting.value = false
-                    }
-                )
-            } catch (e: Exception) {
-                connectionStatus.value = "Exception during connection: ${e.message}"
-                LogManager.addLog("Connection error: ${e.message}", LogType.ERROR)
-                AppLogger.error("Exception during MQTT connection", e)
+        // Connect to the MQTT broker
+        mqttHandler.connect(
+            brokerUrl = brokerUrl.value,
+            clientId = clientId,
+            username = username.value,
+            password = password.value,
+            onSuccess = {
+                connectionStatus.value = "Connected"
+                AppLogger.info("Successfully connected to MQTT broker")
+                subscribeToTopics()
+            },
+            onError = { errorMsg ->
+                connectionStatus.value = "Error: $errorMsg"
+                errorMessage.value = "Failed to connect: $errorMsg"
                 isConnecting.value = false
+                AppLogger.error("Failed to connect to MQTT broker: $errorMsg")
             }
-        }
+        )
     }
     
     private fun subscribeToTopics() {
-        AppLogger.info("MQTT connection successful, subscribing to topics")
+        AppLogger.info("🔊 Subscribing to drone topics...")
         
-        // Show initial connection success notification
-        LogManager.addLog("Connected to MQTT broker successfully", LogType.SUCCESS)
+        // Print debug info about subscription process
+        val topicsToSubscribe = listOf(
+            "drone/position", 
+            "drone/battery", 
+            "drone/altitude", 
+            "drone/speed", 
+            "drone/telemetry"
+        )
         
-        mqttHandler.subscribe("drone/position") { payload ->
-            AppLogger.debug("Received position update: $payload")
-            try {
-                val jsonObject = JSONObject(payload)
-                val latitude = jsonObject.getDouble("latitude")
-                val longitude = jsonObject.getDouble("longitude")
-                dronePosition.value = GeoPoint(latitude, longitude)
-                
-                // Log the data in debug logs but don't send a notification
-                val timestamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date())
-                AppLogger.info("GPS data received ($timestamp): Lat: $latitude, Lng: $longitude")
-                
-                // Show "Drone is live" notification only on first data received
-                if (!droneDataReceived) {
-                    droneDataReceived = true
-                    LogManager.addLog("Drone telemetry stream active! Drone is now transmitting data.", LogType.SUCCESS)
+        AppLogger.info("📋 Will subscribe to topics: ${topicsToSubscribe.joinToString()}")
+        
+        // Subscribe to each topic
+        for (topic in topicsToSubscribe) {
+            mqttHandler.subscribe(topic) { payload ->
+                AppLogger.info("📬 Processing message from topic: $topic")
+                when (topic) {
+                    "drone/position" -> processPositionUpdate(payload)
+                    "drone/battery" -> processBatteryUpdate(payload)
+                    "drone/altitude" -> processAltitudeUpdate(payload)
+                    "drone/speed" -> processSpeedUpdate(payload)
+                    "drone/telemetry" -> processTelemetryUpdate(payload)
                 }
-            } catch (e: Exception) {
-                AppLogger.error("Error parsing position data: ${e.message}")
-            }
-        }
-        
-        mqttHandler.subscribe("drone/battery") { payload ->
-            AppLogger.debug("Received battery update: $payload")
-            try {
-                battery.intValue = payload.toInt()
-                
-                // Only log to debug, don't notify
-                val timestamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date())
-                AppLogger.info("Battery data received ($timestamp): ${battery.intValue}%")
-            } catch (e: Exception) {
-                AppLogger.error("Error parsing battery data: ${e.message}")
-            }
-        }
-        
-        mqttHandler.subscribe("drone/altitude") { payload ->
-            AppLogger.debug("Received altitude update: $payload")
-            try {
-                altitude.doubleValue = payload.toDouble()
-                
-                // Only log to debug, don't notify
-                val timestamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date())
-                AppLogger.info("Altitude data received ($timestamp): ${altitude.doubleValue}m")
-            } catch (e: Exception) {
-                AppLogger.error("Error parsing altitude data: ${e.message}")
-            }
-        }
-        
-        mqttHandler.subscribe("drone/speed") { payload ->
-            AppLogger.debug("Received speed update: $payload")
-            try {
-                speed.doubleValue = payload.toDouble()
-                
-                // Only log to debug, don't notify
-                val timestamp = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(Date())
-                AppLogger.info("Speed data received ($timestamp): ${speed.doubleValue}m/s")
-            } catch (e: Exception) {
-                AppLogger.error("Error parsing speed data: ${e.message}")
-            }
-        }
-        
-        mqttHandler.subscribe("drone/telemetry") { payload ->
-            AppLogger.debug("Received complete telemetry update: $payload")
-            try {
-                val jsonObject = JSONObject(payload)
-                // Process complete telemetry data if needed
-            } catch (e: Exception) {
-                AppLogger.error("Error parsing telemetry data: ${e.message}")
             }
         }
         
         isConnecting.value = false
+        AppLogger.info("✅ Topic subscription complete")
+    }
+    
+    // Helper methods to process each type of update
+    private fun processPositionUpdate(payload: String) {
+        AppLogger.debug("🌍 Received position update: $payload")
+        try {
+            val jsonObject = JSONObject(payload)
+            val latitude = jsonObject.getDouble("latitude")
+            val longitude = jsonObject.getDouble("longitude")
+            dronePosition.value = GeoPoint(latitude, longitude)
+            AppLogger.info("📍 Updated drone position: Lat ${latitude}, Lng ${longitude}")
+        } catch (e: Exception) {
+            AppLogger.error("❌ Error parsing position data: ${e.message}", e)
+        }
+    }
+    
+    private fun processBatteryUpdate(payload: String) {
+        AppLogger.debug("🔋 Received battery update: $payload")
+        try {
+            battery.intValue = payload.toInt()
+            AppLogger.info("🔋 Updated battery: ${battery.intValue}%")
+        } catch (e: Exception) {
+            AppLogger.error("❌ Error parsing battery data: ${e.message}", e)
+        }
+    }
+    
+    private fun processAltitudeUpdate(payload: String) {
+        AppLogger.debug("🏔️ Received altitude update: $payload")
+        try {
+            altitude.doubleValue = payload.toDouble()
+            AppLogger.info("🏔️ Updated altitude: ${altitude.doubleValue}m")
+        } catch (e: Exception) {
+            AppLogger.error("❌ Error parsing altitude data: ${e.message}", e)
+        }
+    }
+    
+    private fun processSpeedUpdate(payload: String) {
+        AppLogger.debug("🚀 Received speed update: $payload")
+        try {
+            speed.doubleValue = payload.toDouble()
+            AppLogger.info("🚀 Updated speed: ${speed.doubleValue}m/s")
+        } catch (e: Exception) {
+            AppLogger.error("❌ Error parsing speed data: ${e.message}", e)
+        }
+    }
+    
+    private fun processTelemetryUpdate(payload: String) {
+        AppLogger.debug("📊 Received full telemetry update: $payload")
+        try {
+            val jsonObject = JSONObject(payload)
+            
+            // Check if this is the first telemetry data
+            if (!isDroneLive) {
+                isDroneLive = true
+                // Notify user that the drone is live
+                AppLogger.info("The drone is live.")
+                // Trigger a notification (we'll implement this next)
+            }
+            
+            // Process all telemetry fields from a single message
+            if (jsonObject.has("latitude") && jsonObject.has("longitude")) {
+                val latitude = jsonObject.getDouble("latitude")
+                val longitude = jsonObject.getDouble("longitude")
+                dronePosition.value = GeoPoint(latitude, longitude)
+                AppLogger.info("📍 Updated position from telemetry: Lat ${latitude}, Lng ${longitude}")
+            }
+            
+            if (jsonObject.has("battery")) {
+                val batteryLevel = jsonObject.getInt("battery")
+                battery.intValue = batteryLevel
+                AppLogger.info("🔋 Updated battery from telemetry: ${battery.intValue}%")
+                if (batteryLevel < 20) {  // Assuming 20% is the low battery threshold
+                    AppLogger.warn("Battery is low: ${batteryLevel}%")
+                    // Trigger a low battery notification
+                }
+            }
+            
+            if (jsonObject.has("altitude")) {
+                altitude.doubleValue = jsonObject.getDouble("altitude")
+                AppLogger.info("🏔️ Updated altitude from telemetry: ${altitude.doubleValue}m")
+            }
+            
+            if (jsonObject.has("speed")) {
+                speed.doubleValue = jsonObject.getDouble("speed")
+                AppLogger.info("🚀 Updated speed from telemetry: ${speed.doubleValue}m/s")
+            }
+            
+        } catch (e: Exception) {
+            AppLogger.error("❌ Error parsing telemetry data: ${e.message}", e)
+        }
     }
     
     fun sendCommand(command: String) {
@@ -201,6 +238,76 @@ class DroneViewModel(application: Application) : AndroidViewModel(application) {
         } catch (e: Exception) {
             AppLogger.error("Error parsing MQTT telemetry data: ${e.message}")
         }
+    }
+    
+    // You can keep the injectTestData method for possible future debug use
+    // but we'll make it more clearly a developer function with a comment
+
+    /**
+     * FOR DEVELOPMENT/TESTING ONLY
+     * Injects test data into the UI to verify display functionality
+     * without requiring a live MQTT connection
+     */
+    // fun injectTestData() {
+    //     dronePosition.value = GeoPoint(-1.2800, 36.8159) // Example coordinates
+    //     battery.intValue = 75
+    //     altitude.doubleValue = 120.5
+    //     speed.doubleValue = 15.8
+    //     AppLogger.info("Injected test data into UI")
+    // }
+    
+    fun isMqttConnected(): Boolean {
+        return mqttHandler.isConnected()
+    }
+    
+    fun diagnoseConnectionIssues() {
+        AppLogger.info("🔍 MQTT Connection Diagnostic")
+        AppLogger.info("→ Broker URL: ${brokerUrl.value}")
+        AppLogger.info("→ Client ID: DroneControlApp-${UUID.randomUUID().toString().substring(0, 8)}")
+        AppLogger.info("→ Username: ${username.value}")
+        AppLogger.info("→ Password: ${password.value.replace(Regex("."), "*")}")
+        AppLogger.info("→ Current connection status: ${connectionStatus.value}")
+        AppLogger.info("→ Is MQTT client connected: ${mqttHandler.isConnected()}")
+        
+        // Try direct connection with detailed logging
+        AppLogger.info("→ Attempting diagnostic connection...")
+        connect()
+    }
+    
+    fun testSubscriptions(logger: (String) -> Unit) {
+        logger("Testing subscription to drone/test...")
+        mqttHandler.subscribe("drone/test") { payload ->
+            logger("✅ Received message on drone/test: $payload")
+        }
+        logger("Publishing test message...")
+        mqttHandler.publish("drone/test", "Test message ${System.currentTimeMillis()}")
+    }
+    
+    fun getMqttConnectionInfo(): String {
+        return mqttHandler.getConnectionInfo()
+    }
+    
+    fun showNotification(title: String, message: String) {
+        val notificationManager = getApplication<Application>().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channelId = "drone_notifications"
+        
+        // Create notification channel if it doesn't exist (for Android O and above)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(channelId, "Drone Notifications", NotificationManager.IMPORTANCE_HIGH)
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        // Create the notification
+        val notification = NotificationCompat.Builder(getApplication(), channelId)
+            .setSmallIcon(R.drawable.ic_notification)  // Replace with your notification icon
+            .setContentTitle(title)
+            .setContentText(message)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+
+        // Show the notification
+        notificationManager.notify(1, notification)
     }
     
     class Factory(private val application: Application) : ViewModelProvider.Factory {
