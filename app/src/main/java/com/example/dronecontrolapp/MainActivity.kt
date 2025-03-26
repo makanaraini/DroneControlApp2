@@ -57,14 +57,43 @@ import androidx.compose.material3.Divider
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
 
 
 class MainActivity : ComponentActivity() {
     private val droneViewModel: DroneViewModel by viewModels { DroneViewModel.Factory(application) }
     private var useMqtt by mutableStateOf(true) // Define useMqtt as a mutable state at activity level
 
+    // Add permission request launcher
+    private val requestPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            // Permission granted, we can show notifications
+            AppLogger.info("Notification permission granted")
+        } else {
+            // Permission denied, inform the user about the implications
+            AppLogger.warn("Notification permission denied - user will not receive important alerts")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Request notification permission if needed (Android 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+        
         setContent {
             DroneControlAppTheme {
                 Surface(

@@ -10,8 +10,8 @@ android {
 
     defaultConfig {
         applicationId = "com.example.dronecontrolapp"
-        minSdk = 24
-        targetSdk = 35
+        minSdk = 26
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0"
 
@@ -47,7 +47,8 @@ dependencies {
     implementation(libs.ui) // Compose UI
     implementation(libs.androidx.foundation) // Compose Foundation
     implementation(libs.androidx.activity.compose.v180) // Compose Activity
-    implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.ktx.v160) // Ensure you have this for NotificationCompat
+    implementation(libs.androidx.appcompat) // Required for backward compatibility
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.osmdroid.android) // OSMdroid for map support
     implementation(libs.androidx.material.icons.extended)

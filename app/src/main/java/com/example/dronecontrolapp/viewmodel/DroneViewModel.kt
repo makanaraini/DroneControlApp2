@@ -3,8 +3,8 @@ package com.example.dronecontrolapp.viewmodel
 import android.app.Application
 import android.content.Context
 import android.os.Build
-import androidx.core.app.NotificationChannel
-import androidx.core.app.NotificationManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import androidx.core.app.NotificationCompat
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -17,6 +17,7 @@ import com.example.dronecontrolapp.AppLogger
 import com.example.dronecontrolapp.MqttHandler
 import com.example.dronecontrolapp.LogManager
 import com.example.dronecontrolapp.LogType
+import com.example.dronecontrolapp.R
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import org.osmdroid.util.GeoPoint
@@ -288,6 +289,12 @@ class DroneViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     fun showNotification(title: String, message: String) {
+        // For Android 13 and above, we need to check for permission
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // We'll log a warning - the actual permission request should be handled in the UI layer
+            AppLogger.warn("Notification may not show: POST_NOTIFICATIONS permission must be granted on Android 13+")
+        }
+        
         val notificationManager = getApplication<Application>().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "drone_notifications"
         
@@ -299,7 +306,7 @@ class DroneViewModel(application: Application) : AndroidViewModel(application) {
 
         // Create the notification
         val notification = NotificationCompat.Builder(getApplication(), channelId)
-            .setSmallIcon(R.drawable.ic_notification)  // Replace with your notification icon
+            .setSmallIcon(android.R.drawable.ic_dialog_info) // Using a system icon as fallback
             .setContentTitle(title)
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
