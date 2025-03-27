@@ -25,13 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.example.dronecontrolapp.AppLogger
 import com.example.dronecontrolapp.viewmodel.DroneViewModel
 import kotlinx.coroutines.launch
-import com.example.dronecontrolapp.ui.theme.AerospaceBlue
-import com.example.dronecontrolapp.ui.theme.DarkGray
-import com.example.dronecontrolapp.ui.theme.ElectricCyan
-import com.example.dronecontrolapp.ui.theme.WarningOrange
-import com.example.dronecontrolapp.ui.theme.EmeraldGreen
-import com.example.dronecontrolapp.ui.theme.OffWhite
-import com.example.dronecontrolapp.ui.theme.Success
+import com.example.dronecontrolapp.ui.theme.*
 import com.example.dronecontrolapp.SmsSender
 
 @Composable
@@ -55,7 +49,7 @@ fun EnhancedControlsSection(
     // Define distinct colors for takeoff and landing - using our theme colors
     val takeoffIconColor = EmeraldGreen  // Green for takeoff
     val landingIconColor = WarningOrange  // Orange for landing
-    val rthIconColor = DarkGray    // Cyan for RTH
+    val rthIconColor = MaterialTheme.colorScheme.onSurface  // RTH icon color
 
     // No box container - just the row of control buttons
     Row(
@@ -111,9 +105,9 @@ private fun GlassMorphicButton(
     label: String,
     scale: Float,
     onClick: () -> Unit,
-    backgroundGradient: List<Color> = listOf(Color(0xFFEC407A), Color(0xFFF48FB1)),
+    backgroundGradient: List<Color> = listOf(AerospaceBlue, ElectricCyan),
     isActive: Boolean = false,
-    iconTint: Color = Color.White
+    iconTint: Color = OffWhite
 ) {
     val pulseAnimation by animateFloatAsState(
         targetValue = if (isActive) 0.85f else 1f,
@@ -139,7 +133,7 @@ private fun GlassMorphicButton(
                 .shadow(
                     elevation = 8.dp,
                     shape = CircleShape,
-                    spotColor = Color.Black.copy(alpha = 0.3f)
+                    spotColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                 )
                 .background(
                     color = if (isActive) AerospaceBlue.copy(alpha = 0.6f) else AerospaceBlue.copy(alpha = 0.3f),
@@ -166,7 +160,7 @@ private fun GlassMorphicButton(
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-            color = Color.Blue
+            color = MaterialTheme.colorScheme.primary
         )
     }
 }

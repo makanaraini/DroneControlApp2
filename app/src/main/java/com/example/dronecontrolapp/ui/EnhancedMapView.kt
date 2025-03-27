@@ -35,6 +35,7 @@ import com.example.dronecontrolapp.AppLogger
 import com.example.dronecontrolapp.R
 import com.example.dronecontrolapp.ui.theme.AerospaceBlue
 import com.example.dronecontrolapp.ui.theme.OffWhite
+import androidx.compose.material3.MaterialTheme
 
 @Composable
 fun EnhancedMapView(
@@ -159,12 +160,12 @@ fun EnhancedMapView(
                     .align(Alignment.BottomEnd)
                     .padding(16.dp)
                     .size(48.dp),
-                containerColor = AerospaceBlue
+                containerColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(
                     Icons.Default.MyLocation, 
                     contentDescription = "Recenter",
-                    tint = OffWhite
+                    tint = MaterialTheme.colorScheme.onPrimary
                 )
             }
         }

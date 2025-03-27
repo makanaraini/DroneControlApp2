@@ -18,6 +18,7 @@ import java.util.*
 import com.example.dronecontrolapp.LogEntry
 import com.example.dronecontrolapp.LogType
 import com.example.dronecontrolapp.getIcon
+import com.example.dronecontrolapp.ui.theme.*
 
 @Composable
 fun NotificationOverlay(
@@ -62,7 +63,7 @@ fun AnimatedNotification(log: LogEntry, onDismiss: () -> Unit) {
 private fun NotificationCard(log: LogEntry, onClose: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = log.type.getBackgroundColor())
+        colors = CardDefaults.cardColors(containerColor = getNotificationBackground(log.type))
     ) {
         Row(
             modifier = Modifier.padding(8.dp).fillMaxWidth(),
@@ -71,20 +72,28 @@ private fun NotificationCard(log: LogEntry, onClose: () -> Unit) {
             Icon(
                 imageVector = log.type.getIcon(),
                 contentDescription = null,
-                tint = log.type.getIconColor(),
+                tint = getNotificationIconColor(log.type),
                 modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = log.message, style = MaterialTheme.typography.bodyMedium, color = Color.DarkGray)
+                Text(
+                    text = log.message, 
+                    style = MaterialTheme.typography.bodyMedium, 
+                    color = MaterialTheme.colorScheme.onSurface
+                )
                 Text(
                     text = log.timestamp.toFormattedTime(),
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                 )
             }
             IconButton(onClick = onClose, modifier = Modifier.size(24.dp)) {
-                Icon(imageVector = Icons.Default.Close, contentDescription = "Dismiss", tint = Color.Gray)
+                Icon(
+                    imageVector = Icons.Default.Close, 
+                    contentDescription = "Dismiss", 
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                )
             }
         }
     }
@@ -97,11 +106,18 @@ fun ConnectionIndicator(isConnected: Boolean, isConnecting: Boolean, onReconnect
         modifier = Modifier.padding(horizontal = 8.dp)
     ) {
         Box(
-            modifier = Modifier.size(8.dp).background(color = getConnectionColor(isConnected, isConnecting), shape = MaterialTheme.shapes.small)
+            modifier = Modifier.size(8.dp).background(
+                color = getConnectionColor(isConnected, isConnecting), 
+                shape = MaterialTheme.shapes.small
+            )
         )
         if (!isConnected && !isConnecting) {
             IconButton(onClick = onReconnect, modifier = Modifier.size(24.dp)) {
-                Icon(imageVector = Icons.Default.Refresh, contentDescription = "Reconnect", tint = MaterialTheme.colorScheme.error)
+                Icon(
+                    imageVector = Icons.Default.Refresh, 
+                    contentDescription = "Reconnect", 
+                    tint = MaterialTheme.colorScheme.error
+                )
             }
         }
     }
@@ -116,39 +132,42 @@ fun ConnectionActiveIndicator(isVisible: Boolean) {
     ) {
         Card(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF4CAF50).copy(alpha = 0.85f))
+            colors = CardDefaults.cardColors(containerColor = Success.copy(alpha = 0.85f))
         ) {
             Row(
                 modifier = Modifier.padding(16.dp).fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = Color.White)
-                Text(text = "Drone telemetry stream active!", color = Color.White, fontWeight = FontWeight.Bold)
+                Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = OffWhite)
+                Text(text = "Drone telemetry stream active!", color = OffWhite, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
-// Utility functions
-private fun LogType.getBackgroundColor() = when (this) {
-    LogType.SUCCESS -> Color(0xFFC8E6C9)
-    LogType.ERROR -> Color(0xFFFFCDD2)
-    LogType.WARNING -> Color(0xFFFFE0B2)
-    LogType.INFO -> Color(0xFFF8BBD0)
+// Utility functions - using theme colors
+@Composable
+private fun getNotificationBackground(type: LogType): Color = when (type) {
+    LogType.SUCCESS -> Success.copy(alpha = 0.1f)
+    LogType.ERROR -> Error.copy(alpha = 0.1f)
+    LogType.WARNING -> Warning.copy(alpha = 0.1f)
+    LogType.INFO -> ElectricCyan.copy(alpha = 0.1f)
 }
 
-private fun LogType.getIconColor() = when (this) {
-    LogType.SUCCESS -> Color(0xFF4CAF50)
-    LogType.ERROR -> Color(0xFFF44336)
-    LogType.WARNING -> Color(0xFFFFC107)
-    LogType.INFO -> Color(0xFFEC407A)
+@Composable
+private fun getNotificationIconColor(type: LogType): Color = when (type) {
+    LogType.SUCCESS -> Success
+    LogType.ERROR -> Error 
+    LogType.WARNING -> Warning
+    LogType.INFO -> ElectricCyan
 }
 
 private fun Long.toFormattedTime(): String = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(this))
 
-private fun getConnectionColor(isConnected: Boolean, isConnecting: Boolean) = when {
-    isConnected -> Color(0xFF4CAF50)
-    isConnecting -> Color(0xFFFFA000)
-    else -> Color(0xFFF44336)
+@Composable
+private fun getConnectionColor(isConnected: Boolean, isConnecting: Boolean): Color = when {
+    isConnected -> Success
+    isConnecting -> WarningOrange
+    else -> Error
 }

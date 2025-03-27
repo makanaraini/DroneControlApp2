@@ -162,7 +162,10 @@ class DroneViewModel(application: Application) : AndroidViewModel(application) {
                 isDroneLive = true
                 // Notify user that the drone is live
                 AppLogger.info("The drone is live.")
-                // Trigger a notification (we'll implement this next)
+                // Show notification to user
+                showNotification("Drone Connected", "Your drone is now live and transmitting data.")
+                // Also add to LogManager so it appears in logs
+                LogManager.addLog("Drone is now live and transmitting telemetry", LogType.SUCCESS)
             }
             
             // Process all telemetry fields from a single message

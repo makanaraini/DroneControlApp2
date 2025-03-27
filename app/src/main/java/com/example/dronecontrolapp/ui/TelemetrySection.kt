@@ -24,9 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.dronecontrolapp.AppLogger
-import com.example.dronecontrolapp.ui.theme.ElectricCyan
-import com.example.dronecontrolapp.ui.theme.AerospaceBlue
-import com.example.dronecontrolapp.ui.theme.Black
+import com.example.dronecontrolapp.ui.theme.*
 import kotlinx.coroutines.delay
 
 @Composable
@@ -60,10 +58,10 @@ fun EnhancedTelemetrySection(
     )
 
     val batteryColor = when {
-        battery > 80 -> Color(0xFF4CAF50) // Green
-        battery > 50 -> Color(0xFF8BC34A) // Light Green
-        battery > 20 -> Color(0xFFFFA000) // Amber
-        else -> Color(0xFFF44336) // Red for low battery
+        battery > 80 -> EmeraldGreen // Theme green
+        battery > 50 -> Success // Light Green
+        battery > 20 -> WarningOrange // Amber
+        else -> Error // Red for low battery
     }
 
     var isLowBatteryBlinking by remember { mutableStateOf(false) }
@@ -84,7 +82,7 @@ fun EnhancedTelemetrySection(
             icon = Icons.Outlined.KeyboardDoubleArrowUp,
             label = "Alt",
             value = "${altitude.toInt()} m",
-            color = Color.Black
+            color = MaterialTheme.colorScheme.onBackground
         )
         CircularSpeedIndicator(speed = speed.toFloat())
         BatteryStatusIndicator(
@@ -100,8 +98,8 @@ fun TelemetryItem(icon: ImageVector, label: String, value: String, color: Color)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(icon, contentDescription = label, tint = color, modifier = Modifier.size(32.dp))
         Spacer(modifier = Modifier.height(4.dp))
-        Text(text = label, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = Color.Black)
-        Text(text = value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+        Text(text = label, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onBackground)
+        Text(text = value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
     }
 }
 
@@ -110,7 +108,7 @@ fun CircularSpeedIndicator(speed: Float) {
     Box(contentAlignment = Alignment.Center) {
         CircularProgressIndicator(
             progress = { speed / 50f }, // Normalize to expected range
-            color = Color(0xDEDEDEDE),  // Light blue accent
+            color = AerospaceBlue.copy(alpha = 0.7f),
             strokeWidth = 4.dp,
             modifier = Modifier.size(48.dp)
         )
@@ -119,12 +117,12 @@ fun CircularSpeedIndicator(speed: Float) {
                 text = "${speed.toInt()}",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.Black
+                color = MaterialTheme.colorScheme.onBackground
             )
             Text(
                 text = "m/s",
                 fontSize = 10.sp,
-                color = Color.Black
+                color = MaterialTheme.colorScheme.onBackground
             )
         }
     }
@@ -136,9 +134,14 @@ fun BatteryStatusIndicator(battery: Int, color: Color, isBlinking: Boolean) {
         modifier = Modifier
             .size(48.dp)
             .clip(CircleShape)
-            .background(if (isBlinking) Color.Red else color.copy(alpha = 0.3f)),
+            .background(if (isBlinking) Error else color.copy(alpha = 0.3f)),
         contentAlignment = Alignment.Center
     ) {
-        Text(text = "$battery%", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.Black) // Navy Blue
+        Text(
+            text = "$battery%", 
+            fontSize = 14.sp, 
+            fontWeight = FontWeight.Bold, 
+            color = MaterialTheme.colorScheme.onBackground
+        )
     }
 }

@@ -864,23 +864,40 @@ fun MqttDebugConsole(
                     .verticalScroll(rememberScrollState())
             ) {
                 logs.forEach { log ->
-                    Text(log, style = MaterialTheme.typography.bodySmall)
-                    Divider(modifier = Modifier.padding(vertical = 2.dp))
+                    Text(
+                        log, 
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Divider(
+                        modifier = Modifier.padding(vertical = 2.dp),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                    )
                 }
             }
         },
         confirmButton = {
-            Button(onClick = {
-                logs.add("Manual test initiated...")
-                droneViewModel.testSubscriptions { message ->
-                    logs.add(message)
-                }
-            }) {
+            Button(
+                onClick = {
+                    logs.add("Manual test initiated...")
+                    droneViewModel.testSubscriptions { message ->
+                        logs.add(message)
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
                 Text("Test Subscriptions")
             }
         },
         dismissButton = {
-            Button(onClick = onDismiss) {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondary
+                )
+            ) {
                 Text("Close")
             }
         }

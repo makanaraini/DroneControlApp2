@@ -19,6 +19,7 @@ import com.example.dronecontrolapp.LogManager
 import com.example.dronecontrolapp.LogType
 import java.text.SimpleDateFormat
 import java.util.*
+import com.example.dronecontrolapp.ui.theme.*
 
 @Composable
 fun LogViewerDialog(onDismiss: () -> Unit) {
@@ -30,14 +31,14 @@ fun LogViewerDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.fillMaxWidth(),
-        containerColor = Color.White,
-        titleContentColor = Color.DarkGray,
+        containerColor = MaterialTheme.colorScheme.surface,
+        titleContentColor = MaterialTheme.colorScheme.onSurface,
         title = { DialogTitle(onClearLogs = { LogManager.clearLogs() }) },
         text = { LogContent(logs, selectedType) { selectedType = it } },
         confirmButton = {
             TextButton(
                 onClick = onDismiss,
-                colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFD81B60))
+                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.primary)
             ) {
                 Text("Close")
             }
@@ -54,7 +55,11 @@ private fun DialogTitle(onClearLogs: () -> Unit) {
     ) {
         Text("System Logs", fontWeight = FontWeight.Bold)
         IconButton(onClick = onClearLogs) {
-            Icon(Icons.Default.Delete, contentDescription = "Clear logs", tint = Color.Black)
+            Icon(
+                Icons.Default.Delete, 
+                contentDescription = "Clear logs", 
+                tint = MaterialTheme.colorScheme.onSurface
+            )
         }
     }
 }
@@ -85,8 +90,8 @@ private fun LogTypeFilter(selectedType: LogType?, onTypeSelected: (LogType?) -> 
             onClick = { onTypeSelected(null) },
             label = { Text("All") },
             colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = Color.LightGray,
-                selectedLabelColor = Color(0xFFE0FFFF)
+                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
             ),
             modifier = Modifier.padding(end = 8.dp)
         )
@@ -97,8 +102,8 @@ private fun LogTypeFilter(selectedType: LogType?, onTypeSelected: (LogType?) -> 
                 label = { Text(type.name) },
                 leadingIcon = { Icon(imageVector = type.icon, contentDescription = null, tint = type.color) },
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = Color.Black,
-                    selectedLabelColor = Color.White
+                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
                 ),
                 modifier = Modifier.padding(end = 8.dp)
             )
@@ -114,10 +119,19 @@ private fun LogEntryItem(log: LogEntry) {
             .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(imageVector = log.type.icon, contentDescription = null, tint = log.type.color, modifier = Modifier.size(24.dp))
+        Icon(
+            imageVector = log.type.icon, 
+            contentDescription = null, 
+            tint = log.type.color, 
+            modifier = Modifier.size(24.dp)
+        )
         Spacer(modifier = Modifier.width(8.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = log.message, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = log.message, 
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
             Text(
                 text = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(log.timestamp)),
                 style = MaterialTheme.typography.bodySmall,

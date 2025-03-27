@@ -40,7 +40,7 @@ android {
 }
 dependencies {
     implementation(libs.play.services.maps) // Google Maps SDK
-    implementation(libs.material) // Material Design
+    implementation("androidx.compose.material:material:1.7.8") // Material Design
     implementation(libs.retrofit) // Retrofit for API calls
     implementation(libs.socket.io) // Socket.IO for real-time communication
     implementation(libs.material3) // Material 3
